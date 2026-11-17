@@ -1,9 +1,13 @@
 import { connection } from "next/server";
 import { PageHeader, SetupNotice } from "@/components/page-header";
 import { requireAdminPage } from "@/lib/auth";
+import { isShiftReaderEnabled } from "@/lib/ai/shift-reader";
 import { getStore, isDatabaseConfigured, listEmployees, listShifts } from "@/lib/data/store";
 import { addDays, formatDateShort, formatTime, mondayOf, todayJst } from "@/lib/time";
 import { ImportWizard, type WizardShift, type WizardWeek } from "./import-wizard";
+
+/** AI 読み取りに時間がかかることがあるため、このページの処理時間の上限を延ばす */
+export const maxDuration = 60;
 
 /** 取り込める週（今週から4週先まで） */
 const WEEKS_AHEAD = 4;
@@ -40,12 +44,13 @@ export default async function ImportPage() {
   return (
     <>
       <PageHeader eyebrow="IMPORT" title="シフト表から入力">
-        紙のシフト表の写真を見ながら、面接担当の勤務を入力します。
+        紙のシフト表の写真から、面接担当の勤務を入力します。
       </PageHeader>
       <ImportWizard
         weeks={weeks}
         employees={employees.map((e) => ({ id: e.id, name: e.name, interviewer: e.is_interviewer }))}
         existing={existing}
+        aiEnabled={isShiftReaderEnabled()}
       />
     </>
   );

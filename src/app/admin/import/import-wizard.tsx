@@ -5,12 +5,13 @@ import { startTransition, useActionState, useEffect, useMemo, useState, type Rea
 import { TIME_OPTIONS } from "@/components/time-select";
 import type { ImportPayload } from "@/lib/shift-import";
 import { importShifts } from "../actions";
+import { readShiftPhoto } from "./actions";
 
 export type WizardWeek = { from: string; label: string; days: { date: string; label: string }[] };
 export type WizardShift = { employeeId: string; date: string; start: string; end: string };
 type Employee = { id: string; name: string; interviewer: boolean };
 
-type Row = { start: string; end: string }; // start が "" なら休み
+type Row = { start: string; end: string; ai?: boolean }; // start が "" なら休み。ai は AI が入れた値（未確認）
 type Person = {
   key: string;
   employeeId: string | null;
@@ -31,19 +32,45 @@ function prefill(employeeId: string | null, week: WizardWeek, existing: WizardSh
   return days;
 }
 
+/** 送る前に写真を縮小する（長い辺1600px・JPEG）。通信量とAIの費用を抑える */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/jpeg", 0.85),
+  );
+}
+
+const normalizeName = (s: string) => s.replace(/[\s　]/g, "");
+
+type AiState =
+  | { status: "idle" }
+  | { status: "reading" }
+  | { status: "done"; count: number; notes: string[] }
+  | { status: "error"; message: string };
+
 export function ImportWizard({
   weeks,
   employees,
   existing,
+  aiEnabled,
 }: {
   weeks: WizardWeek[];
   employees: Employee[];
   existing: WizardShift[];
+  aiEnabled: boolean;
 }) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [weekFrom, setWeekFrom] = useState(weeks[1]?.from ?? weeks[0].from); // 初期値は来週
   const week = weeks.find((w) => w.from === weekFrom) ?? weeks[0];
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [ai, setAi] = useState<AiState>({ status: "idle" });
   const [zoom, setZoom] = useState(false);
   const [people, setPeople] = useState<Person[]>(() =>
     employees.map((e) => ({
@@ -87,7 +114,8 @@ export function ImportWizard({
       ps.map((p) => {
         if (p.key !== key) return p;
         const cur = p.days[date] ?? OFF;
-        let next = { ...cur, ...patch };
+        // 人が触った値は「確認済み」（点線をやめる）
+        let next: Row = { ...cur, ...patch, ai: false };
         if (patch.start === "") next = { ...OFF };
         // 開始を選んだら、終了が未入力（または開始より前）なら仮で開始の6時間後にする
         if (patch.start && (next.end === "" || next.end <= next.start)) {
@@ -103,7 +131,7 @@ export function ImportWizard({
       ps.map((p) => {
         if (p.key !== key) return p;
         const src = p.days[date];
-        return { ...p, days: Object.fromEntries(week.days.map((d) => [d.date, { ...src }])) };
+        return { ...p, days: Object.fromEntries(week.days.map((d) => [d.date, { ...src, ai: false }])) };
       }),
     );
 
@@ -117,6 +145,40 @@ export function ImportWizard({
     setNewName("");
   };
 
+  /** AI でシフト表を読み取り、②・③の入力欄にあらかじめ入れる */
+  const runAi = async () => {
+    if (!photoFile || ai.status === "reading") return;
+    setAi({ status: "reading" });
+    try {
+      const fd = new FormData();
+      fd.set("photo", new File([await shrinkPhoto(photoFile)], "shift.jpg", { type: "image/jpeg" }));
+      fd.set("week", week.from);
+      const result = await readShiftPhoto(fd);
+      if (!result.ok) {
+        setAi({ status: "error", message: result.message });
+        return;
+      }
+      setPeople((ps) => {
+        const next = [...ps];
+        for (const r of result.people) {
+          const days: Record<string, Row> = Object.fromEntries(week.days.map((d) => [d.date, { ...OFF }]));
+          for (const e of r.entries) days[e.date] = { start: e.start, end: e.end, ai: true };
+          const i = next.findIndex((p) => normalizeName(p.name) === normalizeName(r.name));
+          if (i >= 0) next[i] = { ...next[i], days };
+          else next.push({ key: `ai-${r.name}`, employeeId: null, name: r.name, interviewer: false, days });
+        }
+        return next;
+      });
+      setAi({ status: "done", count: result.people.length, notes: result.notes });
+      setStep(2);
+    } catch (e) {
+      console.error(e);
+      setAi({ status: "error", message: "AIの読み取りに失敗しました。通信状況を確認して、もう一度お試しください。" });
+    }
+  };
+
+  const aiCells = selected.reduce((n, p) => n + week.days.filter((d) => p.days[d.date]?.ai).length, 0);
+
   const save = () => {
     const payload: ImportPayload = {
       week: week.from,
@@ -127,7 +189,12 @@ export function ImportWizard({
         entries: p.interviewer
           ? week.days
               .filter((d) => p.days[d.date]?.start)
-              .map((d) => ({ date: d.date, start: p.days[d.date].start, end: p.days[d.date].end }))
+              .map((d) => ({
+                date: d.date,
+                start: p.days[d.date].start,
+                end: p.days[d.date].end,
+                ai: Boolean(p.days[d.date].ai),
+              }))
           : [],
       })),
     };
@@ -174,25 +241,52 @@ export function ImportWizard({
                 className="sr-only"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) setPhoto(URL.createObjectURL(file));
+                  if (!file) return;
+                  setPhoto(URL.createObjectURL(file));
+                  setPhotoFile(file);
+                  setAi({ status: "idle" });
                 }}
               />
             </label>
             {photo && <p className="mt-2 text-xs text-gray">写真をタップすると選び直せます。</p>}
-            <div className="mt-3 border border-dashed border-mist p-3 text-xs leading-relaxed text-gray">
-              <span className="font-bold text-ink">AIによる自動読み取り（準備中）</span>
-              <br />
-              今は写真を見ながら入力します。AIを使えるようにすると、ここで名前と勤務時間を自動で読み取り、次の画面に入力された状態で始められます。
-            </div>
+            {!aiEnabled && (
+              <div className="mt-3 border border-dashed border-mist p-3 text-xs leading-relaxed text-gray">
+                <span className="font-bold text-ink">AIによる自動読み取り（未設定）</span>
+                <br />
+                今は写真を見ながら入力します。APIキーを設定すると、ここで名前と勤務時間を自動で読み取れます。
+              </div>
+            )}
           </Card>
 
-          <Primary onClick={() => setStep(2)}>{photo ? "次へ：面接担当を選ぶ" : "写真なしで次へ"}</Primary>
+          {aiEnabled && photo ? (
+            <>
+              <Primary onClick={runAi} disabled={ai.status === "reading"}>
+                {ai.status === "reading" ? "AIが読み取っています…（10〜30秒）" : "AIで読み取る"}
+              </Primary>
+              {ai.status === "error" && (
+                <p role="status" className="text-sm font-medium text-danger">
+                  {ai.message}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                disabled={ai.status === "reading"}
+                className="min-h-11 w-full border border-ink bg-white text-sm font-bold disabled:opacity-50"
+              >
+                読み取らずに、写真を見ながら手で入力する
+              </button>
+            </>
+          ) : (
+            <Primary onClick={() => setStep(2)}>{photo ? "次へ：面接担当を選ぶ" : "写真なしで次へ"}</Primary>
+          )}
         </>
       )}
 
       {/* ---------- 2. 面接担当 ---------- */}
       {view === 2 && (
         <>
+          {ai.status === "done" && <AiNotice count={ai.count} notes={ai.notes} />}
           <Card title="誰が面接できますか？">
             <p className="mb-3 text-sm text-gray">
               シフト表にいる人のうち、面接を担当できる人を選んでください（複数可）。選んだ人のシフトだけを入力します。
@@ -258,6 +352,13 @@ export function ImportWizard({
           )}
 
           <p className="text-sm text-gray">{week.label.replace("　", "：")}</p>
+          {aiCells > 0 && (
+            <p className="border border-dashed border-ink bg-white p-3 text-sm leading-relaxed">
+              <span className="font-bold">点線の欄（{aiCells}件）はAIが読み取った値です。</span>
+              写真と見比べて確認してください。修正すると実線になります。
+            </p>
+          )}
+          {ai.status === "done" && ai.notes.length > 0 && <AiNotice count={ai.count} notes={ai.notes} compact />}
 
           {selected.map((p) => (
             <Card key={p.key} title={`${p.name} さん`}>
@@ -275,7 +376,7 @@ export function ImportWizard({
                         aria-label={`${d.label} 開始`}
                         value={r.start}
                         onChange={(e) => setRow(p.key, d.date, { start: e.target.value })}
-                        className={`field num min-w-0 flex-1 px-1.5! ${off ? "text-gray" : ""}`}
+                        className={`field num min-w-0 flex-1 px-1.5! ${off ? "text-gray" : ""} ${r.ai ? "border-dashed!" : ""}`}
                       >
                         <option value="">休み</option>
                         {TIME_OPTIONS.slice(0, -1).map((t) => (
@@ -290,7 +391,7 @@ export function ImportWizard({
                         value={r.end}
                         disabled={off}
                         onChange={(e) => setRow(p.key, d.date, { end: e.target.value })}
-                        className={`field num min-w-0 flex-1 px-1.5! disabled:border-mist disabled:text-mist ${bad ? "border-danger! text-danger" : ""}`}
+                        className={`field num min-w-0 flex-1 px-1.5! disabled:border-mist disabled:text-mist ${bad ? "border-danger! text-danger" : ""} ${r.ai ? "border-dashed!" : ""}`}
                       >
                         <option value="">−</option>
                         {TIME_OPTIONS.slice(1).map((t) => (
@@ -379,6 +480,28 @@ export function ImportWizard({
 }
 
 // ---------- 小さな部品 ----------
+
+function AiNotice({ count, notes, compact }: { count: number; notes: string[]; compact?: boolean }) {
+  return (
+    <div className="border border-dashed border-ink bg-white p-3 text-sm leading-relaxed">
+      {!compact && (
+        <p className="font-bold">
+          AIが{count}人分を読み取りました。面接担当を選んで、次の画面で内容を確認してください。
+        </p>
+      )}
+      {notes.length > 0 && (
+        <>
+          <p className={`${compact ? "" : "mt-2 "}text-xs font-bold`}>AIからのメモ（確認してください）</p>
+          <ul className="mt-1 list-disc pl-5 text-xs text-gray">
+            {notes.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
 
 function Steps({ current }: { current: 1 | 2 | 3 }) {
   const labels = ["写真", "面接担当", "シフト入力"];

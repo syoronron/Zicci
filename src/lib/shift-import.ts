@@ -14,7 +14,7 @@ export type ImportPerson = {
   /** 面接担当にするか（「誰が面接できますか？」の答え） */
   interviewer: boolean;
   /** その週の勤務。1日1件まで。休みの日は含めない */
-  entries: { date: string; start: string; end: string }[];
+  entries: { date: string; start: string; end: string; /** AI が読み取った値のまま（人が修正していない） */ ai?: boolean }[];
 };
 
 /** 登録時にサーバーへ送る内容 */

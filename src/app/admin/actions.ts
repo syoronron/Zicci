@@ -360,7 +360,7 @@ const importSchema = z.object({
         employeeId: uuid.nullable(),
         name: z.string().trim().min(1, "名前が空の人がいます").max(30, "名前は30文字以内です"),
         interviewer: z.boolean(),
-        entries: z.array(z.object({ date, start: time, end: time })).max(7),
+        entries: z.array(z.object({ date, start: time, end: time, ai: z.boolean().optional() })).max(7),
       }),
     )
     .min(1, "スタッフがいません")
@@ -456,7 +456,7 @@ export async function importShifts(_: ActionState, formData: FormData): Promise<
         date: e.date,
         start_time: formatTime(e.start),
         end_time: formatTime(e.end),
-        source: "manual" as const,
+        source: e.ai ? ("ai" as const) : ("manual" as const),
       })),
     );
     if (rows.length > 0) {
