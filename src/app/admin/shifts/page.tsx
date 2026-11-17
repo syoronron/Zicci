@@ -35,6 +35,13 @@ export default async function ShiftsPage({ searchParams }: PageProps<"/admin/shi
       </PageHeader>
 
       <div className="space-y-4">
+        <Link
+          href="/admin/import"
+          className="flex min-h-12 items-center justify-between border border-ink bg-ink px-4 font-bold text-white"
+        >
+          シフト表の写真から入力する<span className="num">→</span>
+        </Link>
+
         <WeekNav week={week} basePath="/admin/shifts" />
 
         {interviewers.length === 0 ? (

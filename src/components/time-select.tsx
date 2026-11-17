@@ -1,7 +1,7 @@
 import { formatTime } from "@/lib/time";
 
 /** 0:00〜24:00 を15分刻みで */
-const OPTIONS = Array.from({ length: 24 * 4 + 1 }, (_, i) => formatTime(i * 15));
+export const TIME_OPTIONS = Array.from({ length: 24 * 4 + 1 }, (_, i) => formatTime(i * 15));
 
 /**
  * 時刻の選択欄。
@@ -31,7 +31,7 @@ export function TimeSelect({
       className={`field num ${className}`}
       required
     >
-      {OPTIONS.map((t) => (
+      {TIME_OPTIONS.map((t) => (
         <option key={t} value={t}>
           {t}
         </option>

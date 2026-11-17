@@ -23,7 +23,7 @@ const time = z
   .string()
   .transform((v) => parseTime(v))
   .refine((v): v is number => v !== null, "時刻の形式が正しくありません");
-const uuid = z.string().uuid("不正なIDです");
+const uuid = z.guid("不正なIDです");
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付の形式が正しくありません");
 
 type Parsed<T> = { error: string; data?: never } | { error?: never; data: T };
@@ -348,4 +348,124 @@ export async function cancelReservation(_: ActionState, formData: FormData): Pro
   if (data.length === 0) return failure("予約が見つかりません。");
   refresh();
   return success("予約を取り消しました。この枠はふたたび予約できる状態に戻りました。");
+}
+
+// ---------- シフト表の取り込み（写真を見ながら入力 → 確認 → 登録） ----------
+
+const importSchema = z.object({
+  week: date,
+  people: z
+    .array(
+      z.object({
+        employeeId: uuid.nullable(),
+        name: z.string().trim().min(1, "名前が空の人がいます").max(30, "名前は30文字以内です"),
+        interviewer: z.boolean(),
+        entries: z.array(z.object({ date, start: time, end: time })).max(7),
+      }),
+    )
+    .min(1, "スタッフがいません")
+    .max(100),
+});
+
+/**
+ * 面接担当に選んだ人の、その週のシフトをまとめて置き換える。
+ * データベースを変更する前にすべての入力を確認し、問題があれば何も変更しない。
+ */
+export async function importShifts(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(String(formData.get("payload") ?? ""));
+  } catch {
+    return failure("送信内容を読み取れませんでした。もう一度お試しください。");
+  }
+  const parsed = importSchema.safeParse(raw);
+  if (!parsed.success) return failure(parsed.error.issues[0]?.message ?? "入力内容を確認してください");
+
+  const week = resolveWeek(parsed.data.week);
+  if (week.from !== parsed.data.week) return failure("対象の週が正しくありません。");
+
+  // ---- 1. 変更前の確認（ここで問題があれば、何も変更しない） ----
+  const names = new Set<string>();
+  for (const p of parsed.data.people) {
+    if (names.has(p.name)) return failure(`「${p.name}」さんが2回登録されています。`);
+    names.add(p.name);
+    const days = new Set<string>();
+    for (const e of p.entries) {
+      if (!week.days.includes(e.date)) return failure(`${p.name}さんのシフトに、対象の週以外の日付があります。`);
+      if (days.has(e.date)) return failure(`${p.name}さんの同じ日に2つのシフトがあります。`);
+      days.add(e.date);
+      if (e.start >= e.end) {
+        return failure(`${p.name}さんの${e.date.slice(5).replace("-", "/")}：開始時刻は終了時刻より前にしてください。`);
+      }
+    }
+  }
+
+  const store = await requireStore();
+  const employees = await listEmployees(store.id);
+  const byId = new Map(employees.map((e) => [e.id, e]));
+  const byName = new Map(employees.map((e) => [e.name, e]));
+  for (const p of parsed.data.people) {
+    if (p.employeeId && !byId.has(p.employeeId)) return failure("スタッフが見つかりません。画面を再読み込みしてください。");
+  }
+
+  // ---- 2. スタッフの追加と、面接担当の設定 ----
+  const client = db();
+  const ids = new Map<string, string>(); // name → employee id
+  for (const p of parsed.data.people) {
+    const existing = p.employeeId ? byId.get(p.employeeId) : byName.get(p.name);
+    if (existing) {
+      ids.set(p.name, existing.id);
+      if (existing.is_interviewer !== p.interviewer) {
+        const { error } = await client
+          .from("employees")
+          .update({ is_interviewer: p.interviewer })
+          .eq("id", existing.id)
+          .eq("store_id", store.id);
+        if (error) return failure(explain(error));
+      }
+    } else {
+      const { data, error } = await client
+        .from("employees")
+        .insert({ store_id: store.id, name: p.name, is_interviewer: p.interviewer })
+        .select("id")
+        .single();
+      if (error) return failure(explain(error, `「${p.name}」さんはすでに登録されています。`));
+      ids.set(p.name, data.id);
+    }
+  }
+
+  // ---- 3. 面接担当のシフトを、その週の分だけ置き換える ----
+  const targets = parsed.data.people.filter((p) => p.interviewer);
+  const targetIds = targets.map((p) => ids.get(p.name)!);
+  if (targetIds.length > 0) {
+    const { error: deleteError } = await client
+      .from("shifts")
+      .delete()
+      .eq("store_id", store.id)
+      .in("employee_id", targetIds)
+      .gte("date", week.from)
+      .lte("date", week.to);
+    if (deleteError) return failure(explain(deleteError));
+
+    const rows = targets.flatMap((p) =>
+      p.entries.map((e) => ({
+        store_id: store.id,
+        employee_id: ids.get(p.name)!,
+        date: e.date,
+        start_time: formatTime(e.start),
+        end_time: formatTime(e.end),
+        source: "manual" as const,
+      })),
+    );
+    if (rows.length > 0) {
+      const { error } = await client.from("shifts").insert(rows);
+      if (error) return failure(explain(error, SHIFT_CONFLICT));
+    }
+  }
+
+  refresh();
+  const count = targets.reduce((n, p) => n + p.entries.length, 0);
+  return success(`面接担当${targets.length}人・シフト${count}件を登録しました。`);
 }

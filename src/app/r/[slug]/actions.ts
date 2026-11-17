@@ -15,7 +15,7 @@ function normalizePhone(value: string): string {
 
 const schema = z.object({
   slug: z.string().regex(/^[a-z0-9][a-z0-9-]{1,62}$/, "ページのURLが正しくありません"),
-  slot_id: z.string().uuid("時間を選んでください"),
+  slot_id: z.guid("時間を選んでください"),
   name: z.string().trim().min(1, "お名前を入力してください").max(30, "お名前は30文字以内で入力してください"),
   phone: z
     .string()
