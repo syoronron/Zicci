@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Zicci Design Concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --yellow:#FFC800; --butter:#FFE680; --cream:#FFF6D6; --paper:#FFFDF6;
+    --ink:#1C1B17; --stone:#8A8473; --line:#E6DFC8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#d9d4c4}
+  body{font-family:"Zen Kaku Gothic New",sans-serif;color:var(--ink)}
+  .page{width:794px;height:1123px;background:var(--paper);margin:0 auto;position:relative;overflow:hidden;padding:40px 44px 34px}
+  .en{font-family:"Outfit",sans-serif}
+  .stripe{background:repeating-linear-gradient(-45deg,var(--ink) 0 1.2px,transparent 1.2px 5px)}
+  .stripe-soft{background:repeating-linear-gradient(-45deg,#c9c2ab 0 1.2px,transparent 1.2px 5px)}
+
+  /* header */
+  .head{display:flex;justify-content:space-between;align-items:flex-end;font-size:10px;letter-spacing:.18em;border-bottom:1.5px solid var(--ink);padding-bottom:8px}
+  .head b{font-weight:700}
+
+  /* hero */
+  .hero{display:grid;grid-template-columns:1fr 360px;gap:12px;height:318px;margin-top:22px;position:relative}
+  .eyebrow{font-size:10px;letter-spacing:.24em;color:var(--stone)}
+  .copy{font-size:44px;font-weight:900;line-height:1.22;letter-spacing:-.01em;margin-top:14px}
+  .copy em{font-style:normal;background:linear-gradient(transparent 58%,var(--yellow) 58% 92%,transparent 92%)}
+  .lead{font-size:11.5px;line-height:1.9;color:#4a473e;margin-top:16px;max-width:330px}
+  .legend{display:flex;gap:14px;margin-top:18px;font-size:10px;color:#4a473e;align-items:center}
+  .legend i{display:inline-block;width:11px;height:11px;vertical-align:-1px;margin-right:5px}
+
+  /* sections */
+  .row{display:grid;gap:14px;margin-top:18px}
+  .r1{grid-template-columns:1fr 1.12fr 1.12fr}
+  .r2{grid-template-columns:1fr 1fr .92fr}
+  .card{border:1.5px solid var(--ink);border-radius:18px;padding:14px 16px;background:#fff;position:relative}
+  .num{font-family:"Outfit";font-weight:800;font-size:11px;letter-spacing:.14em;display:flex;align-items:center;gap:7px}
+  .num span{display:inline-block;width:7px;height:7px;background:var(--yellow);border-radius:50%;outline:1.5px solid var(--ink)}
+  .num small{font-family:"Zen Kaku Gothic New";font-weight:500;letter-spacing:.06em;color:var(--stone);font-size:10px}
+
+  /* mark */
+  .mark{display:flex;align-items:center;gap:12px;margin-top:16px}
+  .word{font-family:"Outfit";font-weight:800;font-size:40px;letter-spacing:-.03em;line-height:1}
+  .mark-note{font-size:9.5px;color:var(--stone);margin-top:12px;line-height:1.7}
+
+  /* color */
+  .swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px}
+  .sw{border-radius:10px;height:46px;border:1.2px solid var(--ink);display:flex;align-items:flex-end;padding:5px 7px;font-size:8.5px;font-family:"Outfit";font-weight:500;line-height:1.15}
+  .ratio{display:flex;height:9px;border:1.2px solid var(--ink);border-radius:99px;overflow:hidden;margin-top:10px}
+  .ratio-l{display:flex;justify-content:space-between;font-size:8.5px;color:var(--stone);margin-top:4px;font-family:"Outfit"}
+
+  /* shape */
+  .shapes{display:grid;grid-template-columns:1fr 1fr;gap:10px 8px;margin-top:14px}
+  .shape{display:flex;align-items:center;gap:9px;font-size:10.5px;font-weight:700}
+  .shape small{display:block;font-weight:400;font-size:9px;color:var(--stone);white-space:nowrap}
+  .glyph{width:26px;height:26px;flex:none;border:1.5px solid var(--ink)}
+
+  /* phones */
+  .phone-wrap{display:flex;justify-content:center;margin-top:12px}
+  .phone{width:200px;height:370px;border:1.5px solid var(--ink);border-radius:30px;background:var(--ink);padding:7px}
+  .screen{width:100%;height:100%;background:var(--paper);border-radius:23px;overflow:hidden;position:relative;padding:22px 13px 12px}
+  .notch{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:54px;height:12px;background:var(--ink);border-radius:99px}
+  .s-title{font-size:13.5px;font-weight:900;margin-top:8px}
+  .s-sub{font-size:8.5px;color:var(--stone);margin-top:2px}
+  .days{display:flex;gap:5px;margin-top:11px}
+  .day{flex:1;border:1.2px solid var(--ink);border-radius:99px;text-align:center;padding:5px 0 4px;font-family:"Outfit";font-weight:700;font-size:12px;line-height:1.05;background:#fff}
+  .day small{display:block;font-family:"Zen Kaku Gothic New";font-weight:500;font-size:7.5px}
+  .day.on{background:var(--ink);color:var(--yellow)}
+  .slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px}
+  .slot{height:30px;border-radius:99px;border:1.2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:"Outfit";font-weight:700;font-size:11.5px;background:var(--yellow)}
+  .slot.off{background:#fff;color:#bdb6a0;border-color:#d6cfb8;position:relative;overflow:hidden}
+  .slot.off::after{content:"";position:absolute;inset:0;opacity:.5}
+  .slot.sel{background:var(--ink);color:var(--yellow)}
+  .btn{position:absolute;left:13px;right:13px;bottom:14px;height:38px;border-radius:99px;background:var(--yellow);border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;gap:6px}
+  .btn i{width:16px;height:16px;border-radius:50%;background:var(--ink);display:inline-block;position:relative}
+  .btn i::after{content:"";position:absolute;left:5px;top:4.5px;width:5px;height:5px;border-top:1.6px solid var(--yellow);border-right:1.6px solid var(--yellow);transform:rotate(45deg)}
+  .pick{margin-top:12px;border-radius:14px;background:var(--cream);border:1.2px dashed var(--ink);padding:8px 10px;font-size:9px;line-height:1.5}
+  .pick b{font-family:"Outfit";font-size:15px;font-weight:800;display:block}
+
+  /* timeline screen */
+  .tl{margin-top:12px}
+  .tl-row{display:grid;grid-template-columns:34px 1fr;align-items:center;gap:6px;margin-top:8px;font-size:9px;font-weight:700}
+  .bar{height:16px;border-radius:99px;position:relative;background:transparent}
+  .seg{position:absolute;top:0;bottom:0;border-radius:99px;border:1.2px solid var(--ink)}
+  .axis{display:grid;grid-template-columns:34px 1fr;gap:6px;font-family:"Outfit";font-size:7.5px;color:var(--stone)}
+  .axis div{display:flex;justify-content:space-between}
+  .result{margin-top:12px;border-top:1.2px solid var(--ink);padding-top:9px}
+  .dots{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+  .dot{width:15px;height:15px;border-radius:50%;border:1.2px solid var(--ink);background:var(--yellow)}
+  .dot.x{background:#fff;border-color:#d6cfb8}
+  .chip{display:inline-flex;align-items:center;gap:4px;font-size:8px;border:1.2px solid var(--ink);border-radius:99px;padding:2px 7px;background:#fff;margin-top:8px}
+  .chip i{width:6px;height:6px;border-radius:50%;background:var(--ink)}
+
+  /* type & rules */
+  .type-big{font-family:"Outfit";font-weight:800;font-size:46px;letter-spacing:-.03em;line-height:1;margin-top:12px}
+  .type-big span{color:var(--yellow);-webkit-text-stroke:1.5px var(--ink)}
+  .type-row{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding:5px 0;font-size:9px;color:var(--stone)}
+  .type-row b{color:var(--ink)}
+  .rules{margin-top:12px;display:grid;gap:9px}
+  .rule{display:grid;grid-template-columns:18px 1fr;gap:7px;font-size:9.5px;line-height:1.55}
+  .rule i{width:18px;height:18px;border:1.2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:"Outfit";font-style:normal;font-weight:800;font-size:9px;border-radius:50%;background:var(--yellow)}
+
+  .foot{position:absolute;left:44px;right:44px;bottom:26px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.16em;border-top:1.5px solid var(--ink);padding-top:8px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="head en">
+    <div><b>ZICCI</b>&nbsp;&nbsp;DESIGN CONCEPT</div>
+    <div>VER. 0.1 — 2026.11 — A4</div>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div>
+      <p class="eyebrow en">CONCEPT / シフトの余白を、面接の時間に</p>
+      <h1 class="copy">マス目が、<br>出会いの<br><em>時間</em>になる。</h1>
+      <p class="lead">紙のシフト表の「□」を読み取り、忙しい時間を避けて残った余白を「●」の面接枠に変える。Zicciの見た目は、この変化をそのまま図形で表します。</p>
+      <div class="legend">
+        <span><i style="border:1.5px solid var(--ink)"></i>シフト</span>
+        <span><i class="stripe" style="border:1.5px solid var(--ink)"></i>繁忙・休憩</span>
+        <span><i style="background:var(--yellow);border:1.5px solid var(--ink);border-radius:50%"></i>面接枠</span>
+      </div>
+    </div>
+    <svg id="hero" width="360" height="318" viewBox="0 0 360 318"></svg>
+  </section>
+
+  <!-- ROW 1 -->
+  <div class="row r1">
+    <div class="card">
+      <p class="num"><span></span>01 MARK <small>ロゴ</small></p>
+      <div class="mark">
+        <svg width="54" height="54" viewBox="0 0 54 54">
+          <rect x="2" y="2" width="30" height="30" fill="#fff" stroke="#1C1B17" stroke-width="2"/>
+          <rect x="2" y="2" width="30" height="30" fill="url(#st)" />
+          <circle cx="34" cy="34" r="18" fill="#FFC800" stroke="#1C1B17" stroke-width="2"/>
+          <defs><pattern id="st" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="#1C1B17" stroke-width="1.2"/></pattern></defs>
+        </svg>
+        <div class="word">Z<span style="position:relative">ı<svg style="position:absolute;left:50%;top:-6px;transform:translateX(-50%)" width="10" height="10"><circle cx="5" cy="5" r="4.2" fill="#FFC800" stroke="#1C1B17" stroke-width="1.6"/></svg></span>cc<span style="position:relative">ı<svg style="position:absolute;left:50%;top:-6px;transform:translateX(-50%)" width="10" height="10"><rect x="1" y="1" width="8" height="8" fill="#1C1B17"/></svg></span></div>
+      </div>
+      <p class="mark-note">□ シフト（店）と ● 面接枠（応募者）が重なる瞬間。i の点は「丸＝空き」「四角＝勤務」を表します。</p>
+    </div>
+
+    <div class="card">
+      <p class="num"><span></span>02 COLOR <small>色</small></p>
+      <div class="swatches">
+        <div class="sw" style="background:var(--yellow)">Zicci Yellow<br>#FFC800</div>
+        <div class="sw" style="background:var(--butter)">Butter<br>#FFE680</div>
+        <div class="sw" style="background:var(--cream)">Cream<br>#FFF6D6</div>
+        <div class="sw" style="background:var(--paper)">Paper<br>#FFFDF6</div>
+        <div class="sw" style="background:var(--ink);color:#fff">Ink<br>#1C1B17</div>
+        <div class="sw" style="background:var(--stone);color:#fff">Stone<br>#8A8473</div>
+      </div>
+      <div class="ratio"><div style="width:62%;background:var(--paper)"></div><div style="width:28%;background:var(--ink)"></div><div style="width:10%;background:var(--yellow);border-left:1.2px solid var(--ink)"></div></div>
+      <div class="ratio-l"><span>BASE 62</span><span>INK 28</span><span>YELLOW 10</span></div>
+    </div>
+
+    <div class="card">
+      <p class="num"><span></span>03 SHAPE <small>図形の意味</small></p>
+      <div class="shapes">
+        <div class="shape"><div class="glyph" style="background:#fff"></div><div>四角<small>シフト・勤務</small></div></div>
+        <div class="shape"><div class="glyph" style="background:var(--yellow);border-radius:50%"></div><div>丸<small>面接枠・空き</small></div></div>
+        <div class="shape"><div class="glyph stripe"></div><div>斜線<small>繁忙・休憩</small></div></div>
+        <div class="shape"><div class="glyph" style="border:none;display:flex;align-items:center"><div style="height:1.5px;width:26px;background:var(--ink);position:relative"><div style="position:absolute;right:-1px;top:-4px;width:9px;height:9px;border-radius:50%;background:var(--ink)"></div></div></div><div>線<small>時間の流れ</small></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2 -->
+  <div class="row r2">
+    <div class="card">
+      <p class="num"><span></span>04 UI <small>応募者・予約</small></p>
+      <div class="phone-wrap"><div class="phone"><div class="screen">
+        <div class="notch"></div>
+        <p class="s-sub en" style="letter-spacing:.14em">ZICCI デモ店</p>
+        <p class="s-title">面接日を選ぶ</p>
+        <div class="days">
+          <div class="day"><small>月</small>1</div>
+          <div class="day on"><small>火</small>2</div>
+          <div class="day"><small>水</small>3</div>
+          <div class="day"><small>木</small>4</div>
+          <div class="day"><small>金</small>5</div>
+        </div>
+        <p class="s-sub" style="margin-top:12px">12月2日（火）の空き時間</p>
+        <div class="slots" style="margin-top:6px">
+          <div class="slot">10:00</div>
+          <div class="slot off stripe-soft">10:30</div>
+          <div class="slot">11:00</div>
+          <div class="slot sel">14:00</div>
+          <div class="slot">14:30</div>
+          <div class="slot off stripe-soft">15:00</div>
+          <div class="slot">15:30</div>
+          <div class="slot">16:00</div>
+          <div class="slot off stripe-soft">16:30</div>
+        </div>
+        <div class="pick">選択中<b>12/2 14:00 – 14:30</b></div>
+        <div class="btn">この時間で予約する <i></i></div>
+      </div></div></div>
+    </div>
+
+    <div class="card">
+      <p class="num"><span></span>05 UI <small>店舗・面接枠の生成</small></p>
+      <div class="phone-wrap"><div class="phone"><div class="screen">
+        <div class="notch"></div>
+        <p class="s-sub en" style="letter-spacing:.14em">12/2 TUE</p>
+        <p class="s-title">面接枠プレビュー</p>
+        <div class="tl" id="tl"></div>
+        <div class="result">
+          <p style="font-size:9px;font-weight:700">生成された面接枠 <span class="en" style="font-weight:800">8</span> 件</p>
+          <div class="dots" id="dots"></div>
+          <span class="chip"><i></i>1人でも対応できれば予約OK</span>
+        </div>
+        <div class="btn">確認して公開する <i></i></div>
+      </div></div></div>
+    </div>
+
+    <div class="card">
+      <p class="num"><span></span>06 TYPE <small>文字</small></p>
+      <div class="type-big">14<span>:</span>30</div>
+      <div style="margin-top:10px">
+        <div class="type-row"><b style="font-weight:900;font-size:13px">見出し</b><span>Zen Kaku Gothic 900</span></div>
+        <div class="type-row"><b style="font-size:11px;font-weight:500">本文・説明</b><span>Zen Kaku Gothic 500</span></div>
+        <div class="type-row"><b class="en" style="font-weight:800;font-size:12px">10:00 — 12/2</b><span>Outfit 800</span></div>
+      </div>
+      <p class="num" style="margin-top:16px"><span></span>07 RULES <small>原則</small></p>
+      <div class="rules">
+        <div class="rule"><i>1</i><div><b>黄色は「押せる・空いている」だけ。</b>飾りに使わない。</div></div>
+        <div class="rule"><i>2</i><div><b>片手・親指で届く。</b>主ボタンは画面下、タップ領域44px以上。</div></div>
+        <div class="rule"><i>3</i><div><b>AIの結果は必ず人が確認。</b>読み取り値は点線で示す。</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot en"><span>ZICCI — 面接日程を、シフトから。</span><span>01 / 01</span></div>
+</div>
+
+<script>
+/* ---------- hero composition ---------- */
+(function(){
+  const s=document.getElementById('hero'), NS='http://www.w3.org/2000/svg';
+  const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);s.appendChild(e);return e};
+  const ink='#1C1B17', y='#FFC800';
+  const defs=el('defs',{});
+  defs.innerHTML='<pattern id="hs" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="'+ink+'" stroke-width="1.3"/></pattern>';
+  // big sun / clock circle
+  el('circle',{cx:262,cy:100,r:94,fill:y});
+  el('path',{d:'M262 6 A94 94 0 0 1 356 100 L262 100 Z',fill:'#FFE680'});
+  el('circle',{cx:262,cy:100,r:94,fill:'none',stroke:ink,'stroke-width':1.5});
+  el('line',{x1:262,y1:100,x2:262,y2:40,stroke:ink,'stroke-width':2.2});
+  el('line',{x1:262,y1:100,x2:310,y2:100,stroke:ink,'stroke-width':2.2});
+  el('circle',{cx:262,cy:100,r:4.5,fill:ink});
+  // grid: shift table 6 cols x 5 rows
+  const ox=18, oy=116, c=30, g=6;
+  // 0 empty,1 shift,2 busy(stripe),3 slot(circle)
+  const m=[
+    [1,1,2,1,0,1],
+    [1,3,2,3,1,0],
+    [0,1,2,3,3,1],
+    [1,3,1,2,1,3],
+    [1,1,0,2,3,1],
+  ];
+  m.forEach((row,r)=>row.forEach((v,ci)=>{
+    const x=ox+ci*(c+g), yy=oy+r*(c+g);
+    if(v===0){el('rect',{x,y:yy,width:c,height:c,fill:'none',stroke:'#cfc7ad','stroke-width':1,'stroke-dasharray':'3 3'});return}
+    if(v===3){el('circle',{cx:x+c/2,cy:yy+c/2,r:c/2,fill:y,stroke:ink,'stroke-width':1.5});return}
+    el('rect',{x,y:yy,width:c,height:c,fill:'#FFFDF6',stroke:ink,'stroke-width':1.5});
+    if(v===2) el('rect',{x:x+.75,y:yy+.75,width:c-1.5,height:c-1.5,fill:'url(#hs)'});
+  }));
+  // time axis
+  const ay=oy+5*(c+g)+2;
+  el('line',{x1:ox,y1:ay,x2:352,y2:ay,stroke:ink,'stroke-width':1.5});
+  for(let i=0;i<=8;i++){const x=ox+i*((352-ox)/8);el('line',{x1:x,y1:ay-4,x2:x,y2:ay+4,stroke:ink,'stroke-width':1.5})}
+  el('circle',{cx:352,cy:ay,r:5,fill:ink});
+  const t=el('text',{x:ox,y:ay+13,'font-family':'Outfit','font-size':9,'letter-spacing':'1.5',fill:'#8A8473'});t.textContent='10:00';
+  const t2=el('text',{x:352,y:ay+13,'font-family':'Outfit','font-size':9,'letter-spacing':'1.5',fill:'#8A8473','text-anchor':'end'});t2.textContent='22:00';
+  // small floating accents
+  el('rect',{x:296,y:236,width:16,height:16,fill:ink,transform:'rotate(12 304 244)'});
+  el('circle',{cx:30,cy:84,r:8,fill:'none',stroke:ink,'stroke-width':1.5});
+  el('circle',{cx:52,cy:84,r:8,fill:y,stroke:ink,'stroke-width':1.5});
+})();
+
+/* ---------- timeline mock ---------- */
+(function(){
+  const tl=document.getElementById('tl');
+  const start=10,end=22,span=end-start,pct=h=>((h-start)/span*100)+'%',w=(a,b)=>((b-a)/span*100)+'%';
+  const people=[['田中',[[10,16]]],['佐藤',[[13,22]]],['鈴木',[[10,14.5],[18,22]]]];
+  const busy=[[11.5,13.5],[17.5,20]];
+  let h='<div class="axis"><span></span><div><span>10</span><span>13</span><span>16</span><span>19</span><span>22</span></div></div>';
+  h+='<div class="tl-row"><span style="color:#8A8473">繁忙</span><div class="bar">'+busy.map(b=>`<div class="seg stripe" style="left:${pct(b[0])};width:${w(b[0],b[1])};border-color:#1C1B17;background-color:#fff"></div>`).join('')+'</div></div>';
+  people.forEach(([n,sh])=>{
+    h+=`<div class="tl-row"><span>${n}</span><div class="bar">`+sh.map(b=>`<div class="seg" style="left:${pct(b[0])};width:${w(b[0],b[1])};background:#FFE680"></div>`).join('')+'</div></div>';
+  });
+  tl.innerHTML=h;
+  document.getElementById('dots').innerHTML=Array.from({length:12},(_,i)=>`<div class="dot${[2,5,7,9].includes(i)?' x stripe-soft':''}"></div>`).join('');
+})();
+</script>
+</body>
+</html>
