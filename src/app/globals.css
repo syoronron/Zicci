@@ -1,34 +1,60 @@
 @import "tailwindcss";
 
-/* アプリ全体の色（ここを変えると全画面の色が変わる） */
+/*
+ * Zicci デザイントークン（design/concept-a4.html と対応）
+ * 黄色（accent）は「1画面に1か所まで」。決定ボタンか選択中の項目だけに使う。
+ */
 :root {
-  --background: #fafaf9;
-  --surface: #ffffff;
-  --foreground: #1c1917;
-  --muted: #78716c;
-  --border: #e7e5e4;
-  --brand: #ea580c;
-  --brand-foreground: #ffffff;
-  --ok: #16a34a;
-  --warn: #ca8a04;
+  --paper: #fafaf7;
+  --white: #ffffff;
+  --ink: #141414;
+  --gray: #6e6e6a;
+  --mist: #c9c9c4;
+  --line: #e3e3de;
+  --accent: #ffc800;
+  --danger: #c2261d;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-brand: var(--brand);
-  --color-brand-foreground: var(--brand-foreground);
-  --color-ok: var(--ok);
-  --color-warn: var(--warn);
-  --font-sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
-    "Yu Gothic UI", Meiryo, system-ui, sans-serif;
+  --color-paper: var(--paper);
+  --color-white: var(--white);
+  --color-ink: var(--ink);
+  --color-gray: var(--gray);
+  --color-mist: var(--mist);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-jp), "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --font-num: var(--font-latin), var(--font-jp), system-ui, sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 斜線パターン：繁忙・休憩・埋まり */
+@utility stripe {
+  background-image: repeating-linear-gradient(-45deg, var(--ink) 0 1px, transparent 1px 5px);
+}
+@utility stripe-soft {
+  background-image: repeating-linear-gradient(-45deg, var(--mist) 0 1px, transparent 1px 5px);
+}
+
+/* 数字・時刻は桁がそろう英字フォントで */
+@utility num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* フォーム部品の共通スタイル（スマホで押しやすい高さ44px以上） */
+@layer components {
+  .field {
+    @apply block w-full min-h-11 border border-ink bg-white px-3 text-base outline-none focus:ring-2 focus:ring-ink focus:ring-offset-1;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium text-gray;
+  }
 }

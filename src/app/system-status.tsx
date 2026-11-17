@@ -28,17 +28,17 @@ export async function SystemStatus() {
 
   const view = {
     unconfigured: {
-      dot: "bg-warn",
+      dot: "stripe bg-white",
       title: "データベース未設定",
       body: "環境変数 SUPABASE_URL と SUPABASE_SECRET_KEY を設定してください。",
     },
     error: {
-      dot: "bg-red-600",
+      dot: "bg-danger",
       title: "データベースに接続できません",
       body: status.kind === "error" ? status.message : "",
     },
     ok: {
-      dot: "bg-ok",
+      dot: "bg-ink",
       title: "データベース接続OK",
       body:
         status.kind === "ok" && status.storeName
@@ -48,11 +48,11 @@ export async function SystemStatus() {
   }[status.kind];
 
   return (
-    <div className="flex gap-3 rounded-2xl border border-border bg-surface p-4">
-      <span className={`mt-1.5 size-2.5 shrink-0 rounded-full ${view.dot}`} aria-hidden />
+    <div className="flex gap-3 border border-ink bg-white p-4">
+      <span className={`mt-1 size-3 shrink-0 border border-ink ${view.dot}`} aria-hidden />
       <div>
         <p className="font-semibold">{view.title}</p>
-        <p className="mt-0.5 break-all text-sm text-muted">{view.body}</p>
+        <p className="mt-0.5 break-all text-sm text-gray">{view.body}</p>
       </div>
     </div>
   );
