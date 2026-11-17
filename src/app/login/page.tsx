@@ -33,9 +33,9 @@ async function LoginForm({ searchParams }: { searchParams: PageProps<"/login">["
         <p className="font-bold">パスワードがまだ設定されていません</p>
         <p className="mt-1 text-gray">
           Vercel の Settings → Environment Variables に <span className="num font-semibold text-ink">ADMIN_PASSWORD</span>{" "}
-          を追加してください（8文字以上）。追加したあとに Redeploy すると、ここからログインできるようになります。
+          を追加してください（4文字以上）。追加したあとに Redeploy すると、ここからログインできるようになります。
         </p>
-        {status === "too_short" && <p className="mt-2 font-medium text-danger">今のパスワードは短すぎます（8文字以上にしてください）。</p>}
+        {status === "too_short" && <p className="mt-2 font-medium text-danger">今のパスワードは短すぎます（4文字以上にしてください）。</p>}
       </div>
     );
   }
