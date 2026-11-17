@@ -2,7 +2,9 @@ import { requireAdminPage } from "@/lib/auth";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { DayTimeline } from "@/components/day-timeline";
 import { PageHeader, Section, SetupNotice } from "@/components/page-header";
+import { ShareBooking } from "@/components/share-booking";
 import { WeekNav } from "@/components/week-nav";
+import { bookingUrl } from "@/lib/site-url";
 import {
   getStore,
   isDatabaseConfigured,
@@ -43,6 +45,7 @@ export default async function SlotsPage({ searchParams }: PageProps<"/admin/slot
   const draft = count("draft");
   const published = count("published");
   const reserved = slots.filter((s) => s.reserved).length;
+  const url = await bookingUrl(store.public_slug);
 
   return (
     <>
@@ -82,11 +85,14 @@ export default async function SlotsPage({ searchParams }: PageProps<"/admin/slot
                 面接枠を作り直す
               </SubmitButton>
             </ActionForm>
+            {/* 公開待ちがあるときだけ公開ボタンを出す（ActionForm は結果メッセージのため常に置く） */}
             <ActionForm action={publishSlots}>
               <input type="hidden" name="week" value={week.from} />
-              <SubmitButton variant="accent" className="w-full" pendingText="公開中…">
-                公開待ちの{draft}件を公開する
-              </SubmitButton>
+              {draft > 0 && (
+                <SubmitButton variant="accent" className="w-full" pendingText="公開中…">
+                  公開待ちの{draft}件を公開する
+                </SubmitButton>
+              )}
             </ActionForm>
           </div>
           <p className="mt-3 text-xs leading-relaxed text-gray">
@@ -94,6 +100,16 @@ export default async function SlotsPage({ searchParams }: PageProps<"/admin/slot
             {interviewers.length}人
           </p>
         </Section>
+
+        {published > 0 && (
+          <Section title="応募者に共有する">
+            <p className="mb-3 text-sm text-gray">
+              公開中の{published}件は、予約ページから予約できます。URLを応募者に送ってください。
+            </p>
+            {/* 黄色は1画面に1か所：公開ボタンがないときは共有ボタンを黄色に */}
+            <ShareBooking url={url} storeName={store.name} showUrl={false} variant={draft > 0 ? "ink" : "accent"} />
+          </Section>
+        )}
 
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray" aria-label="凡例">
           {[

@@ -3,7 +3,17 @@ import { connection } from "next/server";
 import { requireAdminPage } from "@/lib/auth";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { PageHeader, Section, SetupNotice } from "@/components/page-header";
-import { getStore, isDatabaseConfigured, listEmployees, listReservations, listShifts, listSlots } from "@/lib/data/store";
+import { ShareBooking } from "@/components/share-booking";
+import { bookingUrl } from "@/lib/site-url";
+import {
+  getStore,
+  isDatabaseConfigured,
+  listBookableSlots,
+  listEmployees,
+  listReservations,
+  listShifts,
+  listSlots,
+} from "@/lib/data/store";
 import { formatDateShort, formatPhone, formatTime, jstToDate, todayJst, toJst } from "@/lib/time";
 import { cancelReservation } from "./actions";
 import { resolveWeek } from "@/lib/week";
@@ -16,12 +26,14 @@ export default async function AdminHome() {
   if (!store) return <p className="text-sm">デモ店舗が見つかりません。seed.sql を実行してください。</p>;
 
   const week = resolveWeek(undefined);
-  const [employees, shifts, slots, reservations] = await Promise.all([
+  const [employees, shifts, slots, reservations, bookable, url] = await Promise.all([
     listEmployees(store.id),
     listShifts(store.id, week.from, week.to),
     listSlots(store.id, week.from, week.to),
     // 今日以降の予約
     listReservations(store.id, jstToDate(todayJst(), 0).toISOString()),
+    listBookableSlots(store.id),
+    bookingUrl(store.public_slug),
   ]);
   const interviewers = employees.filter((e) => e.is_interviewer);
   const interviewerShifts = shifts.filter((s) => interviewers.some((e) => e.id === s.employee_id));
@@ -114,6 +126,20 @@ export default async function AdminHome() {
               })}
             </ul>
           )}
+        </Section>
+      </div>
+
+      <div className="mb-4">
+        <Section
+          title="予約ページ"
+          aside={<span className="num text-xs text-gray">予約できる枠 {bookable.length}件</span>}
+        >
+          {bookable.length === 0 && (
+            <p className="mb-3 text-sm font-medium text-danger">
+              いま予約できる面接枠がありません。「面接枠」で枠を作って公開してから共有してください。
+            </p>
+          )}
+          <ShareBooking url={url} storeName={store.name} variant="accent" showUrl={false} />
         </Section>
       </div>
 

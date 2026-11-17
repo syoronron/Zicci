@@ -328,7 +328,7 @@ export async function publishSlots(_: ActionState, formData: FormData): Promise<
   refresh();
   return data.length === 0
     ? failure("公開待ちの面接枠がありません。")
-    : success(`${data.length}件の面接枠を公開しました。`);
+    : success(`${data.length}件の面接枠を公開しました。下の「予約ページを共有する」から応募者に送ってください。`);
 }
 
 // ---------- 予約 ----------
