@@ -48,7 +48,7 @@ async function checkDatabase(): Promise<Status> {
 }
 
 /** データベースにつながっているかを表示する（設定の確認用） */
-export async function SystemStatus() {
+export async function SystemStatus({ compact = false }: { compact?: boolean }) {
   // アクセスのたびに最新の状態を確認する（ビルド時に結果を固定しない）
   await connection();
   const status = await checkDatabase();
@@ -78,6 +78,19 @@ export async function SystemStatus() {
           : "接続できました。デモ店舗のデータ（seed.sql）はまだ入っていません。",
     },
   }[status.kind];
+
+  // 小さな1行表示：問題がなければ状態だけ、問題があれば直し方も出す
+  if (compact) {
+    return (
+      <div className="flex items-start gap-2 text-[11px] text-gray">
+        <span className={`mt-0.5 size-2.5 shrink-0 border border-ink ${view.dot}`} aria-hidden />
+        <p className="break-all">
+          <span className="num font-semibold tracking-[0.12em]">SYSTEM</span>　{view.title}
+          {status.kind !== "ok" && <span className="mt-0.5 block text-danger">{view.body}</span>}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex gap-3 border border-ink bg-white p-4">
