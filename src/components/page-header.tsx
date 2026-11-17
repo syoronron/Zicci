@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 export function PageHeader({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
@@ -33,9 +34,13 @@ export function Section({ title, children, aside }: { title?: string; children: 
 export function SetupNotice() {
   return (
     <div className="border border-ink bg-white p-4 text-sm leading-relaxed">
-      <p className="font-bold">データベースが設定されていません</p>
+      <p className="font-bold">データベースの設定が完了していません</p>
       <p className="mt-1 text-gray">
-        環境変数 SUPABASE_URL と SUPABASE_SECRET_KEY を設定してください。手順は README を参照してください。
+        環境変数 SUPABASE_URL と SUPABASE_SECRET_KEY を確認してください。
+        <Link href="/" className="font-bold text-ink underline underline-offset-4">
+          トップページ
+        </Link>
+        の「システムの状態」に、どこを直せばよいかが表示されます。
       </p>
     </div>
   );
