@@ -1,17 +1,27 @@
+import { headers } from "next/headers";
 import { connection } from "next/server";
+import { requireAdminPage } from "@/lib/auth";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { PageHeader, Section, SetupNotice } from "@/components/page-header";
+import { CopyLink } from "@/components/copy-link";
 import { TimeSelect } from "@/components/time-select";
 import { getStore, isDatabaseConfigured, listBlocks } from "@/lib/data/store";
 import { formatTime, weekdayLabel } from "@/lib/time";
+import { logout } from "../../login/actions";
 import { addBlock, deleteBlock, updateStore } from "../actions";
 
 export default async function SettingsPage() {
   await connection();
+  await requireAdminPage();
   if (!isDatabaseConfigured()) return <SetupNotice />;
   const store = await getStore();
   if (!store) return null;
   const blocks = await listBlocks(store.id);
+  // 予約ページの完全なURL（このサイトのドメイン＋パス）
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const bookingPath = `/r/${store.public_slug}`;
 
   return (
     <>
@@ -146,9 +156,17 @@ export default async function SettingsPage() {
         </Section>
 
         <Section title="応募者向けの予約ページ">
-          <p className="num text-sm break-all">/r/{store.public_slug}</p>
-          <p className="mt-1 text-xs text-gray">応募者の予約ページは次のステップで作ります。</p>
+          <p className="mb-3 text-sm text-gray">
+            このURLを、求人サイトの応募完了メッセージや、応募者への連絡に貼り付けてください。公開中の面接枠から予約できます。
+          </p>
+          <CopyLink url={`${proto}://${host}${bookingPath}`} path={bookingPath} />
         </Section>
+
+        <form action={logout}>
+          <button type="submit" className="min-h-11 w-full text-sm text-gray underline underline-offset-4">
+            ログアウト
+          </button>
+        </form>
       </div>
     </>
   );

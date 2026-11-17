@@ -159,3 +159,109 @@ export async function listSlots(storeId: string, from: string, to: string): Prom
     };
   });
 }
+
+// ---------------------------------------------------------------------
+// 予約（P2）
+// ---------------------------------------------------------------------
+
+/** 応募者が予約できる最短の時間（これより直前の枠は表示しない）。DB 関数の既定値と同じ */
+export const BOOKING_MIN_LEAD_MINUTES = 60;
+/** 応募者に表示する期間 */
+export const BOOKING_WINDOW_DAYS = 21;
+
+export type PublicStore = { id: string; name: string; address: string | null; public_slug: string };
+
+/** 応募者向け：URL の文字列から店舗を探す */
+export async function getStoreBySlug(slug: string): Promise<PublicStore | null> {
+  if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)) return null;
+  const { data, error } = await db()
+    .from("stores")
+    .select("id, name, address, public_slug")
+    .eq("public_slug", slug)
+    .maybeSingle();
+  if (error) fail("店舗", error);
+  return data;
+}
+
+export type BookableSlot = { id: string; start_at: string; end_at: string };
+
+/**
+ * 応募者向け：予約できる枠（公開中・未予約・担当者あり・直前でない）。
+ * 個人情報や担当者名は含めない。
+ */
+export async function listBookableSlots(storeId: string, now: Date = new Date()): Promise<BookableSlot[]> {
+  const from = new Date(now.getTime() + BOOKING_MIN_LEAD_MINUTES * 60_000);
+  const to = new Date(now.getTime() + BOOKING_WINDOW_DAYS * 24 * 60 * 60_000);
+  const { data, error } = await db()
+    .from("interview_slots")
+    .select("id, start_at, end_at, slot_interviewers(employee_id), reservations(id)")
+    .eq("store_id", storeId)
+    .eq("status", "published")
+    .gte("start_at", from.toISOString())
+    .lt("start_at", to.toISOString())
+    .order("start_at");
+  if (error) fail("面接枠", error);
+  return data
+    .filter((s) => {
+      const r = s.reservations as unknown;
+      const reserved = Array.isArray(r) ? r.length > 0 : r != null;
+      return !reserved && (s.slot_interviewers ?? []).length > 0;
+    })
+    .map((s) => ({ id: s.id, start_at: s.start_at, end_at: s.end_at }));
+}
+
+/** 応募者向け：予約完了画面に出す内容（日時だけ。個人情報は返さない） */
+export async function getReservationSummary(
+  storeId: string,
+  reservationId: string,
+): Promise<{ start_at: string; end_at: string } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(reservationId)) return null;
+  const { data, error } = await db()
+    .from("reservations")
+    .select("interview_slots(start_at, end_at)")
+    .eq("id", reservationId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (error) fail("予約", error);
+  const slot = (data?.interview_slots ?? null) as unknown as { start_at: string; end_at: string } | null;
+  return slot;
+}
+
+export type Reservation = {
+  id: string;
+  applicant_name: string;
+  phone: string | null;
+  email: string | null;
+  created_at: string;
+  start_at: string;
+  end_at: string;
+  interviewer_name: string | null;
+};
+
+/** 管理画面向け：指定時刻以降に始まる予約 */
+export async function listReservations(storeId: string, fromIso: string): Promise<Reservation[]> {
+  const { data, error } = await db()
+    .from("reservations")
+    .select(
+      "id, applicant_name, phone, email, created_at, interview_slots!inner(start_at, end_at), employees(name)",
+    )
+    .eq("store_id", storeId)
+    .gte("interview_slots.start_at", fromIso);
+  if (error) fail("予約", error);
+  return data
+    .map((r) => {
+      const slot = r.interview_slots as unknown as { start_at: string; end_at: string };
+      const employee = r.employees as unknown as { name: string } | null;
+      return {
+        id: r.id,
+        applicant_name: r.applicant_name,
+        phone: r.phone,
+        email: r.email,
+        created_at: r.created_at,
+        start_at: slot.start_at,
+        end_at: slot.end_at,
+        interviewer_name: employee?.name ?? null,
+      };
+    })
+    .sort((a, b) => a.start_at.localeCompare(b.start_at));
+}

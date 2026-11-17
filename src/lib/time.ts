@@ -99,3 +99,12 @@ export function formatDateShort(date: string): string {
   const [, m, d] = date.split("-").map(Number);
   return `${m}/${d}（${weekdayLabel(weekdayOf(date))}）`;
 }
+
+/** 電話番号を読みやすく区切る（表示用）。"09012345678" → "090-1234-5678" */
+export function formatPhone(value: string): string {
+  const d = value.replace(/\D/g, "");
+  if (/^0[5789]0\d{8}$/.test(d)) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`; // 携帯・IP電話など
+  if (/^0[36]\d{8}$/.test(d)) return `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`; // 東京・大阪
+  if (/^0\d{9}$/.test(d)) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`; // その他の固定電話（目安）
+  return value;
+}

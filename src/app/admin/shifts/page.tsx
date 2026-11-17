@@ -1,3 +1,4 @@
+import { requireAdminPage } from "@/lib/auth";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { PageHeader, Section, SetupNotice } from "@/components/page-header";
@@ -10,6 +11,7 @@ import { addShift, deleteShift, updateShift } from "../actions";
 
 export default async function ShiftsPage({ searchParams }: PageProps<"/admin/shifts">) {
   const { week: weekParam } = await searchParams;
+  await requireAdminPage();
   if (!isDatabaseConfigured()) return <SetupNotice />;
   const store = await getStore();
   if (!store) return null;

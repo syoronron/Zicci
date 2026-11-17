@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { failure, success, type ActionState } from "@/lib/action-state";
+import { isAdmin } from "@/lib/auth";
 import { db, listBlocks, listEmployees, listShifts, listSlots, requireStore } from "@/lib/data/store";
 import { generateSlots } from "@/lib/slots/generate";
 import { addDays, formatTime, jstToDate, parseTime, toJst } from "@/lib/time";
@@ -13,6 +14,8 @@ import { resolveWeek } from "@/lib/week";
  * どの操作も「デモ店舗のデータか」をサーバー側で確認してから行う。
  * （P4 でログインを入れたら、ここで「ログイン中の店舗か」を確認する）
  */
+
+const LOGIN_REQUIRED = "ログインの有効期限が切れました。ページを再読み込みして、もう一度ログインしてください。";
 
 // ---------- 入力チェック用の部品 ----------
 
@@ -60,6 +63,7 @@ const storeSchema = z.object({
 });
 
 export async function updateStore(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(storeSchema, formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -85,6 +89,7 @@ const blockSchema = z
   .refine((v) => v.start < v.end, "開始時刻は終了時刻より前にしてください");
 
 export async function addBlock(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(blockSchema, formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -98,6 +103,7 @@ export async function addBlock(_: ActionState, formData: FormData): Promise<Acti
 }
 
 export async function deleteBlock(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(z.object({ id: uuid }), formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -118,6 +124,7 @@ const employeeSchema = z.object({
 });
 
 export async function addEmployee(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(employeeSchema, formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -130,6 +137,7 @@ export async function addEmployee(_: ActionState, formData: FormData): Promise<A
 }
 
 export async function setInterviewer(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(z.object({ id: uuid, value: z.enum(["true", "false"]) }), formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -144,6 +152,7 @@ export async function setInterviewer(_: ActionState, formData: FormData): Promis
 }
 
 export async function deleteEmployee(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(z.object({ id: uuid }), formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -162,6 +171,7 @@ const shiftTimes = z
 const SHIFT_CONFLICT = "この人の別のシフトと時間が重なっています。";
 
 export async function addShift(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(
     z.object({ employee_id: uuid, date }).and(shiftTimes),
     formData,
@@ -193,6 +203,7 @@ export async function addShift(_: ActionState, formData: FormData): Promise<Acti
 }
 
 export async function updateShift(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(z.object({ id: uuid }).and(shiftTimes), formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -208,6 +219,7 @@ export async function updateShift(_: ActionState, formData: FormData): Promise<A
 }
 
 export async function deleteShift(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(z.object({ id: uuid }), formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -220,6 +232,7 @@ export async function deleteShift(_: ActionState, formData: FormData): Promise<A
 // ---------- 面接枠 ----------
 
 export async function regenerateSlots(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const week = resolveWeek(String(formData.get("week") ?? ""));
   const store = await requireStore();
   const [blocks, employees, shifts, existing] = await Promise.all([
@@ -273,6 +286,7 @@ export async function regenerateSlots(_: ActionState, formData: FormData): Promi
 }
 
 export async function toggleSlot(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const parsed = parse(z.object({ id: uuid }), formData);
   if (parsed.error !== undefined) return failure(parsed.error);
   const store = await requireStore();
@@ -299,6 +313,7 @@ export async function toggleSlot(_: ActionState, formData: FormData): Promise<Ac
 }
 
 export async function publishSlots(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
   const week = resolveWeek(String(formData.get("week") ?? ""));
   const store = await requireStore();
   const { data, error } = await db()
@@ -314,4 +329,23 @@ export async function publishSlots(_: ActionState, formData: FormData): Promise<
   return data.length === 0
     ? failure("公開待ちの面接枠がありません。")
     : success(`${data.length}件の面接枠を公開しました。`);
+}
+
+// ---------- 予約 ----------
+
+export async function cancelReservation(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  const parsed = parse(z.object({ id: uuid }), formData);
+  if (parsed.error !== undefined) return failure(parsed.error);
+  const store = await requireStore();
+  const { data, error } = await db()
+    .from("reservations")
+    .delete()
+    .eq("id", parsed.data.id)
+    .eq("store_id", store.id)
+    .select("id");
+  if (error) return failure(explain(error));
+  if (data.length === 0) return failure("予約が見つかりません。");
+  refresh();
+  return success("予約を取り消しました。この枠はふたたび予約できる状態に戻りました。");
 }

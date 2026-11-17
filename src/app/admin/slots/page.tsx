@@ -1,3 +1,4 @@
+import { requireAdminPage } from "@/lib/auth";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { DayTimeline } from "@/components/day-timeline";
 import { PageHeader, Section, SetupNotice } from "@/components/page-header";
@@ -24,6 +25,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default async function SlotsPage({ searchParams }: PageProps<"/admin/slots">) {
   const { week: weekParam } = await searchParams;
+  await requireAdminPage();
   if (!isDatabaseConfigured()) return <SetupNotice />;
   const store = await getStore();
   if (!store) return null;

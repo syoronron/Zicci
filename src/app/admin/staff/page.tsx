@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { requireAdminPage } from "@/lib/auth";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { PageHeader, Section, SetupNotice } from "@/components/page-header";
 import { getStore, isDatabaseConfigured, listEmployees } from "@/lib/data/store";
@@ -6,6 +7,7 @@ import { addEmployee, deleteEmployee, setInterviewer } from "../actions";
 
 export default async function StaffPage() {
   await connection();
+  await requireAdminPage();
   if (!isDatabaseConfigured()) return <SetupNotice />;
   const store = await getStore();
   if (!store) return null;
