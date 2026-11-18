@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 /** 画面下のタブ（片手・親指で届く位置） */
@@ -56,6 +56,17 @@ function Icon({ name, active }: { name: (typeof tabs)[number]["icon"]; active: b
   }
 }
 
+/** 押したタブの上に出る、読み込み中の線 */
+function PendingBar() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden
+      className={`absolute inset-x-3 top-0 h-0.5 bg-ink transition-opacity ${pending ? "animate-pulse opacity-100" : "opacity-0"}`}
+    />
+  );
+}
+
 export function AdminNav() {
   const pathname = usePathname();
   const week = useSearchParams().get("week");
@@ -71,10 +82,11 @@ export function AdminNav() {
               <Link
                 href={keepWeek ? `${tab.href}?week=${week}` : tab.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-1 text-[10px] ${
+                className={`relative flex min-h-14 flex-col items-center justify-center gap-1 text-[10px] ${
                   active ? "font-bold" : "text-gray"
                 }`}
               >
+                <PendingBar />
                 <Icon name={tab.icon} active={active} />
                 {tab.label}
               </Link>
