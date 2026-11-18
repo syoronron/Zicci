@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { requireAdminPage } from "@/lib/auth";
-import { ActionForm, SubmitButton } from "@/components/action-form";
 import { PageHeader, Section, SetupNotice } from "@/components/page-header";
 import { ShareBooking } from "@/components/share-booking";
 import { bookingUrl } from "@/lib/site-url";
@@ -15,7 +14,7 @@ import {
   listSlots,
 } from "@/lib/data/store";
 import { formatDateShort, formatPhone, formatTime, jstToDate, todayJst, toJst } from "@/lib/time";
-import { cancelReservation } from "./actions";
+import { ReservationCalendar, type CalendarReservation } from "./reservation-calendar";
 import { resolveWeek } from "@/lib/week";
 
 export default async function AdminHome() {
@@ -30,11 +29,27 @@ export default async function AdminHome() {
     listEmployees(store.id),
     listShifts(store.id, week.from, week.to),
     listSlots(store.id, week.from, week.to),
-    // 今日以降の予約
-    listReservations(store.id, jstToDate(todayJst(), 0).toISOString()),
+    // 今月1日以降の予約（カレンダーで今月の過去分も見られるように）
+    listReservations(store.id, jstToDate(`${todayJst().slice(0, 8)}01`, 0).toISOString()),
     listBookableSlots(store.id),
     bookingUrl(store.public_slug),
   ]);
+  const today = todayJst();
+  const calendar: CalendarReservation[] = reservations.map((r) => {
+    const start = toJst(r.start_at);
+    const end = toJst(r.end_at);
+    return {
+      id: r.id,
+      date: start.date,
+      start: formatTime(start.minutes),
+      end: formatTime(end.minutes || 1440),
+      name: r.applicant_name,
+      phone: r.phone ? formatPhone(r.phone) : null,
+      phoneRaw: r.phone,
+      email: r.email,
+      interviewer: r.interviewer_name,
+    };
+  });
   const interviewers = employees.filter((e) => e.is_interviewer);
   const interviewerShifts = shifts.filter((s) => interviewers.some((e) => e.id === s.employee_id));
   const published = slots.filter((s) => s.status === "published").length;
@@ -74,59 +89,7 @@ export default async function AdminHome() {
       </PageHeader>
 
       <div className="mb-4">
-        <Section
-          title="これからの面接"
-          aside={<span className="num text-xs text-gray">{reservations.length}件</span>}
-        >
-          {reservations.length === 0 ? (
-            <p className="text-sm text-gray">まだ予約はありません。面接枠を公開して、予約ページのURLを応募者に送りましょう。</p>
-          ) : (
-            <ul className="-mx-4 border-t border-line">
-              {reservations.map((r) => {
-                const start = toJst(r.start_at);
-                return (
-                  <li key={r.id} className="border-b border-line px-4 py-3 last:border-b-0">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <p className="num font-bold">
-                        {formatDateShort(start.date)} {formatTime(start.minutes)}
-                      </p>
-                      <p className="text-xs text-gray">担当：{r.interviewer_name ?? "未定"}</p>
-                    </div>
-                    <p className="mt-1 text-lg font-bold">{r.applicant_name} さん</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {r.phone && (
-                        <a
-                          href={`tel:${r.phone}`}
-                          className="num inline-flex min-h-10 items-center border border-ink bg-white px-3 text-sm font-semibold"
-                        >
-                          {formatPhone(r.phone)}
-                        </a>
-                      )}
-                      {r.email && (
-                        <a
-                          href={`mailto:${r.email}`}
-                          className="inline-flex min-h-10 max-w-full items-center truncate border border-ink bg-white px-3 text-sm"
-                        >
-                          {r.email}
-                        </a>
-                      )}
-                      <ActionForm
-                        action={cancelReservation}
-                        confirm={`${r.applicant_name}さんの予約を取り消しますか？応募者には自動で連絡されないので、必要なら電話などで伝えてください。`}
-                        className="ml-auto"
-                      >
-                        <input type="hidden" name="id" value={r.id} />
-                        <SubmitButton variant="danger" pendingText="…">
-                          取り消す
-                        </SubmitButton>
-                      </ActionForm>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Section>
+        <ReservationCalendar reservations={calendar} today={today} />
       </div>
 
       <div className="mb-4">
