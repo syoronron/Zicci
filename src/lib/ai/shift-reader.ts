@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { formatDateShort } from "@/lib/time";
+import { demoReadResult } from "./demo-result";
 import { normalizeReadResult, type ReadPerson } from "./normalize";
 
 /**
@@ -14,9 +15,14 @@ import { normalizeReadResult, type ReadPerson } from "./normalize";
 /** 使うモデル（店長が選んだ、費用の安い Haiku） */
 export const SHIFT_READER_MODEL = "claude-haiku-5-5";
 
-/** API キーが設定されていれば AI 読み取りを使える */
+/** イベントのデモ用モード（SHIFT_READER_DEMO=1）。決めておいた結果を返す（demo-result.ts） */
+export function isShiftReaderDemo(): boolean {
+  return process.env.SHIFT_READER_DEMO?.trim() === "1";
+}
+
+/** API キーが設定されているか、デモ用モードなら AI 読み取りのボタンを出す */
 export function isShiftReaderEnabled(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return isShiftReaderDemo() || Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 }
 
 const ResultSchema = z.object({
@@ -69,7 +75,12 @@ export async function readShiftSheet(input: {
   weekDays: string[];
   knownNames: string[];
 }): Promise<ReadShiftResult> {
-  if (!isShiftReaderEnabled()) return { ok: false, message: "AI読み取りは設定されていません。" };
+  if (isShiftReaderDemo()) {
+    // 本物と同じくらいの待ち時間をとってから、決めておいた結果を返す
+    await new Promise((r) => setTimeout(r, 4000 + Math.random() * 3000));
+    return { ok: true, ...demoReadResult(input.weekDays) };
+  }
+  if (!process.env.ANTHROPIC_API_KEY?.trim()) return { ok: false, message: "AI読み取りは設定されていません。" };
 
   const client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY!.trim(),
