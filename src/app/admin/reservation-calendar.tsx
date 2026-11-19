@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { cancelReservation } from "./actions";
@@ -170,6 +171,14 @@ export function ReservationCalendar({ reservations, today }: { reservations: Cal
                       >
                         メール
                       </a>
+                    )}
+                    {r.date >= today && (
+                      <Link
+                        href={`/admin/guide/run?r=${r.id}`}
+                        className="inline-flex min-h-10 items-center border border-ink bg-ink px-3 text-sm font-bold text-white"
+                      >
+                        面接を始める
+                      </Link>
                     )}
                     {r.date >= today && (
                       <ActionForm

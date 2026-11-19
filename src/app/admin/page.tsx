@@ -5,6 +5,7 @@ import { PageHeader, Section, SetupNotice } from "@/components/page-header";
 import { ShareBooking } from "@/components/share-booking";
 import { bookingUrl } from "@/lib/site-url";
 import {
+  getInterviewGuide,
   getStore,
   isDatabaseConfigured,
   listBookableSlots,
@@ -25,7 +26,7 @@ export default async function AdminHome() {
   if (!store) return <p className="text-sm">デモ店舗が見つかりません。seed.sql を実行してください。</p>;
 
   const week = resolveWeek(undefined);
-  const [employees, shifts, slots, reservations, bookable, url] = await Promise.all([
+  const [employees, shifts, slots, reservations, bookable, url, guide] = await Promise.all([
     listEmployees(store.id),
     listShifts(store.id, week.from, week.to),
     listSlots(store.id, week.from, week.to),
@@ -33,7 +34,9 @@ export default async function AdminHome() {
     listReservations(store.id, jstToDate(`${todayJst().slice(0, 8)}01`, 0).toISOString()),
     listBookableSlots(store.id),
     bookingUrl(store.public_slug),
+    getInterviewGuide(store.id),
   ]);
+  const guideCount = guide.needsSetup ? 0 : guide.items.length;
   const today = todayJst();
   const calendar: CalendarReservation[] = reservations.map((r) => {
     const start = toJst(r.start_at);
@@ -61,6 +64,12 @@ export default async function AdminHome() {
       title: "面接担当を選ぶ",
       detail: `面接担当 ${interviewers.length}人`,
       href: "/admin/staff",
+    },
+    {
+      done: guideCount > 0,
+      title: "面接の進め方を作る",
+      detail: guideCount > 0 ? `${guideCount}項目` : "アルバイトでも面接できるように",
+      href: "/admin/guide",
     },
     {
       done: interviewerShifts.length > 0,

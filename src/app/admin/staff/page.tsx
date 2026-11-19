@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { connection } from "next/server";
 import { requireAdminPage } from "@/lib/auth";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -21,6 +22,19 @@ export default async function StaffPage() {
       </PageHeader>
 
       <div className="space-y-4">
+        <Link
+          href="/admin/guide"
+          className="flex min-h-14 items-center justify-between gap-3 border border-ink bg-white px-4 py-3"
+        >
+          <span>
+            <span className="block font-bold">面接の進め方を作る</span>
+            <span className="block text-xs text-gray">質問の流れを決めておくと、アルバイトでも面接を担当できます</span>
+          </span>
+          <span className="num" aria-hidden>
+            →
+          </span>
+        </Link>
+
         <Section title="スタッフを追加">
           <ActionForm action={addEmployee} resetOnSuccess>
             <label className="label" htmlFor="name">

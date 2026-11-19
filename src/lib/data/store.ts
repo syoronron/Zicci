@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { parseGuide, type GuideItem } from "@/lib/interview-guide";
 import { addDays, jstToDate, parseTime } from "@/lib/time";
 
 /**
@@ -264,4 +265,38 @@ export async function listReservations(storeId: string, fromIso: string): Promis
       };
     })
     .sort((a, b) => a.start_at.localeCompare(b.start_at));
+}
+
+// ---------------------------------------------------------------------
+// 面接の進め方（質問フロー）
+// ---------------------------------------------------------------------
+
+/** 質問フローを読む。SQL（interview_guide 列の追加）がまだなら needsSetup を返す */
+export async function getInterviewGuide(
+  storeId: string,
+): Promise<{ needsSetup: true } | { needsSetup: false; items: GuideItem[] }> {
+  const { data, error } = await db().from("stores").select("interview_guide").eq("id", storeId).maybeSingle();
+  if (error) {
+    if (error.code === "42703" || /interview_guide/.test(error.message)) return { needsSetup: true };
+    fail("面接の進め方", error);
+  }
+  return { needsSetup: false, items: parseGuide(data?.interview_guide) };
+}
+
+/** 面接画面の見出し用：予約者の名前と時間（その店舗の予約だけ） */
+export async function getReservationBrief(
+  storeId: string,
+  reservationId: string,
+): Promise<{ name: string; start_at: string } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(reservationId)) return null;
+  const { data, error } = await db()
+    .from("reservations")
+    .select("applicant_name, interview_slots(start_at)")
+    .eq("id", reservationId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (error) fail("予約", error);
+  if (!data) return null;
+  const slot = data.interview_slots as unknown as { start_at: string } | null;
+  return slot ? { name: data.applicant_name, start_at: slot.start_at } : null;
 }

@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { failure, success, type ActionState } from "@/lib/action-state";
 import { isAdmin } from "@/lib/auth";
+import { guideSchema } from "@/lib/interview-guide";
 import { db, listBlocks, listEmployees, listShifts, listSlots, requireStore } from "@/lib/data/store";
 import { generateSlots } from "@/lib/slots/generate";
 import { addDays, formatTime, jstToDate, parseTime, toJst } from "@/lib/time";
@@ -468,4 +469,29 @@ export async function importShifts(_: ActionState, formData: FormData): Promise<
   refresh();
   const count = targets.reduce((n, p) => n + p.entries.length, 0);
   return success(`面接担当${targets.length}人・シフト${count}件を登録しました。`);
+}
+
+// ---------- 面接の進め方（質問フロー） ----------
+
+export async function saveInterviewGuide(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(String(formData.get("items") ?? ""));
+  } catch {
+    return failure("送信内容を読み取れませんでした。もう一度お試しください。");
+  }
+  const parsed = guideSchema.safeParse(raw);
+  if (!parsed.success) return failure(parsed.error.issues[0]?.message ?? "入力内容を確認してください");
+
+  const store = await requireStore();
+  const { error } = await db().from("stores").update({ interview_guide: parsed.data }).eq("id", store.id);
+  if (error) {
+    if (error.code === "42703" || /interview_guide/.test(error.message)) {
+      return failure("データベースの準備ができていません。Supabase で面接の進め方用の SQL を実行してください。");
+    }
+    return failure(explain(error));
+  }
+  refresh();
+  return success(`面接の進め方を保存しました（${parsed.data.length}項目）。`);
 }
