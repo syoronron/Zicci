@@ -412,19 +412,17 @@ function ReservationItem({
                     選考中に戻す
                   </SubmitButton>
                 </ActionForm>
-                {/* 採用した人を画面から消す（予約・面接の記録ごと削除） */}
-                {r.status === "passed" && (
-                  <ActionForm
-                    action={cancelReservation}
-                    confirm={`${r.name}さんを一覧から削除しますか？面接の記録も消え、元に戻せません。応募者のページも見られなくなります。`}
-                    silentSuccess
-                  >
-                    <input type="hidden" name="id" value={r.id} />
-                    <SubmitButton variant="danger" pendingText="…">
-                      取り消す
-                    </SubmitButton>
-                  </ActionForm>
-                )}
+                {/* 結果が出た人を画面から消す（予約・面接の記録ごと削除） */}
+                <ActionForm
+                  action={cancelReservation}
+                  confirm={`${r.name}さんを一覧から削除しますか？面接の記録も消え、元に戻せません。応募者のページも見られなくなります。`}
+                  silentSuccess
+                >
+                  <input type="hidden" name="id" value={r.id} />
+                  <SubmitButton variant="danger" pendingText="…">
+                    取り消す
+                  </SubmitButton>
+                </ActionForm>
               </div>
             )}
 
