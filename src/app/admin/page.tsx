@@ -60,6 +60,8 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
       firstDayTime: r.first_day_at ? formatTime(toJst(r.first_day_at).minutes) : null,
       statusUrl: r.status_token ? `${origin}/r/${store.public_slug}/s/${r.status_token}` : null,
       canceledReason: r.canceled_reason,
+      evaluation: r.evaluation,
+      hasRecord: r.has_record,
     };
   });
   // 結果連絡を待っている人（期限の近い順）

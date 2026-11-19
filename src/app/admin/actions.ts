@@ -5,6 +5,7 @@ import { z } from "zod";
 import { failure, success, type ActionState } from "@/lib/action-state";
 import { isAdmin } from "@/lib/auth";
 import { guideSchema } from "@/lib/interview-guide";
+import { recordSchema } from "@/lib/interview-record";
 import {
   db,
   getAfterSettings,
@@ -645,4 +646,63 @@ export async function deleteCanceledReservation(_: ActionState, formData: FormDa
   if (data.length === 0) return failure("取り消し済みの予約だけ削除できます。");
   refresh();
   return success("取り消された予約を削除しました。");
+}
+
+// ---------- 面接の記録 ----------
+
+/**
+ * 面接中の回答・評価・メモを保存する（面接画面で進むたびに自動で呼ばれる）。
+ * 最後（completed）なら、面接前の予約を選考中に進めて、結果連絡の期限も決める。
+ */
+export async function saveInterviewRecord(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  const id = z.guid().safeParse(formData.get("id"));
+  if (!id.success) return failure("予約が見つかりません。");
+  let raw: unknown;
+  try {
+    raw = JSON.parse(String(formData.get("record") ?? ""));
+  } catch {
+    return failure("記録を読み取れませんでした。");
+  }
+  const parsed = recordSchema.safeParse(raw);
+  if (!parsed.success) return failure(parsed.error.issues[0]?.message ?? "入力内容を確認してください");
+  const record = { ...parsed.data, updatedAt: new Date().toISOString() };
+
+  const store = await requireStore();
+  const { data: r, error: readError } = await db()
+    .from("reservations")
+    .select("id, status, interview_at")
+    .eq("id", id.data)
+    .eq("store_id", store.id)
+    .maybeSingle();
+  if (readError) {
+    if (readError.code === "42703") return failure(SETUP_NEEDED);
+    return failure(explain(readError));
+  }
+  if (!r) return failure("予約が見つかりません。");
+  if (r.status === "canceled") return failure("取り消された予約には記録できません。");
+
+  const patch: Record<string, unknown> = { interview_record: record, updated_at: record.updatedAt };
+  let due: string | null = null;
+  if (record.completed && r.status === "booked") {
+    const settings = await getAfterSettings(store.id);
+    if (settings) {
+      due = resultDueDate(toJst(r.interview_at).date, settings.result_days);
+      patch.status = "interviewed";
+      patch.result_due = due;
+    }
+  }
+  const { error } = await db().from("reservations").update(patch).eq("id", r.id).eq("store_id", store.id);
+  if (error) {
+    if (error.code === "42703") return failure("データベースの準備ができていません。Supabase で面接の記録用の SQL を実行してください。");
+    return failure(explain(error));
+  }
+  if (record.completed) refresh();
+  return success(
+    !record.completed
+      ? "自動保存しました"
+      : due
+        ? `記録を保存し、選考中にしました。結果連絡の期限は ${due.slice(5).replace("-", "/")} です。`
+        : "記録を保存しました。",
+  );
 }

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { parseGuide, type GuideItem } from "@/lib/interview-guide";
+import { hasAnswer, parseRecord, type Evaluation, type InterviewRecord } from "@/lib/interview-record";
 import { isStatus, type ReservationStatus } from "@/lib/progress";
 import { addDays, jstToDate, parseTime } from "@/lib/time";
 
@@ -244,6 +245,9 @@ export type Reservation = {
   first_day_at: string | null;
   status_token: string | null;
   canceled_reason: string | null;
+  // ---- 面接の記録（SQL 20261121000000 の実行後に使える） ----
+  evaluation: Evaluation | null;
+  has_record: boolean;
 };
 
 /** 新しい列がまだない（SQL 未実行）ときのエラーか */
@@ -251,35 +255,67 @@ function isMissingColumn(error: { code?: string; message: string }): boolean {
   return error.code === "42703" || /column .* does not exist|could not find .* column/i.test(error.message);
 }
 
+const RESERVATION_COLUMNS =
+  "id, applicant_name, phone, email, created_at, interview_at, interview_end_at, status, result_due, first_day_at, status_token, canceled_reason, employees(name)";
+
 /** 管理画面向け：指定時刻以降に面接がある予約（辞退した予約も含む） */
 export async function listReservations(storeId: string, fromIso: string): Promise<Reservation[]> {
-  const { data, error } = await db()
+  // 面接の記録（SQL 20261121000000）があれば、評価もいっしょに読む
+  type Row = {
+    id: string;
+    applicant_name: string;
+    phone: string | null;
+    email: string | null;
+    created_at: string;
+    interview_at: string;
+    interview_end_at: string;
+    status: string;
+    result_due: string | null;
+    first_day_at: string | null;
+    status_token: string | null;
+    canceled_reason: string | null;
+    employees: unknown;
+    interview_record?: unknown;
+  };
+  let res: { data: Row[] | null; error: { code?: string; message: string } | null } = await db()
     .from("reservations")
-    .select(
-      "id, applicant_name, phone, email, created_at, interview_at, interview_end_at, status, result_due, first_day_at, status_token, canceled_reason, employees(name)",
-    )
+    .select(`${RESERVATION_COLUMNS}, interview_record`)
     .eq("store_id", storeId)
     .gte("interview_at", fromIso)
     .order("interview_at");
-  if (error) {
-    if (isMissingColumn(error)) return listReservationsLegacy(storeId, fromIso);
-    fail("予約", error);
+  if (res.error && isMissingColumn(res.error)) {
+    res = await db()
+      .from("reservations")
+      .select(RESERVATION_COLUMNS)
+      .eq("store_id", storeId)
+      .gte("interview_at", fromIso)
+      .order("interview_at");
   }
-  return data.map((r) => ({
-    id: r.id,
-    applicant_name: r.applicant_name,
-    phone: r.phone,
-    email: r.email,
-    created_at: r.created_at,
-    start_at: r.interview_at,
-    end_at: r.interview_end_at,
-    interviewer_name: (r.employees as unknown as { name: string } | null)?.name ?? null,
-    status: isStatus(r.status) ? r.status : "booked",
-    result_due: r.result_due,
-    first_day_at: r.first_day_at,
-    status_token: r.status_token,
-    canceled_reason: r.canceled_reason,
-  }));
+  const { data, error } = res;
+  if (error || !data) {
+    if (error && isMissingColumn(error)) return listReservationsLegacy(storeId, fromIso);
+    fail("予約", error ?? { message: "データがありません" });
+  }
+  return data.map((r) => {
+    const record = parseRecord(r.interview_record);
+    return {
+      id: r.id,
+      applicant_name: r.applicant_name,
+      phone: r.phone,
+      email: r.email,
+      created_at: r.created_at,
+      start_at: r.interview_at,
+      end_at: r.interview_end_at,
+      interviewer_name: (r.employees as unknown as { name: string } | null)?.name ?? null,
+      status: isStatus(r.status) ? r.status : "booked",
+      result_due: r.result_due,
+      first_day_at: r.first_day_at,
+      status_token: r.status_token,
+      canceled_reason: r.canceled_reason,
+      evaluation: record?.evaluation ?? null,
+      has_record: record !== null && (record.completed || record.answers.some(hasAnswer)),
+    };
+  });
 }
 
 /** SQL 20261120000000 を実行する前の読み方（進み具合なし） */
@@ -307,6 +343,8 @@ async function listReservationsLegacy(storeId: string, fromIso: string): Promise
         first_day_at: null,
         status_token: null,
         canceled_reason: null,
+        evaluation: null,
+        has_record: false,
       };
     })
     .sort((a, b) => a.start_at.localeCompare(b.start_at));
@@ -446,4 +484,28 @@ export async function getChangePrefill(
     fail("予約", error);
   }
   return data ? { name: data.applicant_name, phone: data.phone ?? "", email: data.email ?? "" } : null;
+}
+
+/** 面接の記録を読む（その店舗の予約だけ）。SQL 未実行なら needsSetup */
+export async function getInterviewRecord(
+  storeId: string,
+  reservationId: string,
+): Promise<{ needsSetup: true } | { needsSetup: false; record: InterviewRecord | null; status: ReservationStatus } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(reservationId)) return null;
+  const { data, error } = await db()
+    .from("reservations")
+    .select("interview_record, status")
+    .eq("id", reservationId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (error) {
+    if (isMissingColumn(error)) return { needsSetup: true };
+    fail("面接の記録", error);
+  }
+  if (!data) return null;
+  return {
+    needsSetup: false,
+    record: parseRecord(data.interview_record),
+    status: isStatus(data.status) ? data.status : "booked",
+  };
 }

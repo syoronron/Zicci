@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { TIME_OPTIONS } from "@/components/time-select";
+import { EVALUATION_LABEL, type Evaluation } from "@/lib/interview-record";
 import { dueInfo, milestones, STATUS_LABEL, type ReservationStatus } from "@/lib/progress";
 import { cancelReservation, deleteCanceledReservation, markInterviewed, setFirstDay, setResult } from "./actions";
 
@@ -23,6 +24,8 @@ export type CalendarReservation = {
   firstDayTime: string | null;
   statusUrl: string | null; // 応募者専用ページ
   canceledReason: string | null;
+  evaluation: Evaluation | null; // 面接の総合評価
+  hasRecord: boolean;
 };
 
 const WEEK = ["月", "火", "水", "木", "金", "土", "日"];
@@ -194,7 +197,12 @@ function ReservationItem({ r, today }: { r: CalendarReservation; today: string }
           <p className="text-base font-bold">{r.name} さん</p>
           <span className={`px-1.5 py-0.5 text-[11px] font-bold ${BADGE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
         </div>
-        <p className="text-xs text-gray">担当：{r.interviewer ?? "未定"}</p>
+        <p className="text-xs text-gray">
+          担当：{r.interviewer ?? "未定"}
+          {r.evaluation && (
+            <span className="ml-2 font-bold text-ink">評価：{EVALUATION_LABEL[r.evaluation]}</span>
+          )}
+        </p>
 
         {/* 進み具合（4段階） */}
         {!canceled && (
@@ -328,6 +336,15 @@ function ReservationItem({ r, today }: { r: CalendarReservation; today: string }
               選考中に戻す
             </SubmitButton>
           </ActionForm>
+        )}
+
+        {r.hasRecord && !canceled && (
+          <Link
+            href={`/admin/guide/record?r=${r.id}`}
+            className="mt-2 flex min-h-10 items-center justify-between border border-ink bg-white px-3 text-sm font-bold"
+          >
+            面接の記録を見る<span className="num">→</span>
+          </Link>
         )}
 
         {r.statusUrl && (
