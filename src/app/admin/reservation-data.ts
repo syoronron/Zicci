@@ -40,6 +40,7 @@ export async function loadReservations(store: Store) {
       statusUrl: r.status_token ? `${origin}/r/${store.public_slug}/s/${r.status_token}` : null,
       canceledReason: r.canceled_reason,
       createdAt: r.created_at,
+      acknowledged: r.acknowledged,
       evaluation: r.evaluation,
       hasRecord: r.has_record,
     };
@@ -55,14 +56,20 @@ export async function loadReservations(store: Store) {
     .filter((r) => r.date === today && r.status !== "canceled")
     .sort((a, b) => a.start.localeCompare(b.start));
 
-  // 新しい予約：この48時間に入った、これからの面接（新しい順）
+  // 新しい予約：代表者がまだ確認していない、これからの面接（新しい順）
+  // 確認の記録（SQL 20261122000000）がまだなければ、この48時間に入った予約
   const now = Date.now();
+  const canAcknowledge = reservations.some((r) => r.acknowledged !== null) || reservations.length === 0;
   const fresh = calendar
     .filter(
       (r) =>
-        r.status !== "canceled" && r.date >= today && now - Date.parse(r.createdAt) <= NEW_BOOKING_HOURS * 60 * 60_000,
+        r.status !== "canceled" &&
+        r.date >= today &&
+        (r.acknowledged === null
+          ? now - Date.parse(r.createdAt) <= NEW_BOOKING_HOURS * 60 * 60_000
+          : r.acknowledged === false),
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  return { today, now, calendar, waiting, todays, fresh, bookingUrl: url };
+  return { today, now, calendar, waiting, todays, fresh, canAcknowledge, bookingUrl: url };
 }

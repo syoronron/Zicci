@@ -706,3 +706,29 @@ export async function saveInterviewRecord(_: ActionState, formData: FormData): P
         : "記録を保存しました。",
   );
 }
+
+// ---------- 新しい予約の「代表者の確認」 ----------
+
+/** 新しい予約を確認済みにする（ids は1件でも複数でも可）。確認するとホームの「新しい予約」から外れる */
+export async function acknowledgeReservations(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  const ids = formData.getAll("id").map(String);
+  const parsed = z.array(uuid).min(1, "予約を選んでください").max(100).safeParse(ids);
+  if (!parsed.success) return failure(parsed.error.issues[0]?.message ?? "予約が見つかりません。");
+  const store = await requireStore();
+  const { data, error } = await db()
+    .from("reservations")
+    .update({ acknowledged_at: new Date().toISOString() })
+    .eq("store_id", store.id)
+    .in("id", parsed.data)
+    .is("acknowledged_at", null)
+    .select("id");
+  if (error) {
+    if (error.code === "42703") {
+      return failure("データベースの準備ができていません。Supabase で「代表者の確認」用の SQL を実行してください。");
+    }
+    return failure(explain(error));
+  }
+  refresh();
+  return success(data.length > 1 ? `${data.length}件の予約を確認済みにしました。` : "確認済みにしました。");
+}

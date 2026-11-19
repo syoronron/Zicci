@@ -248,6 +248,8 @@ export type Reservation = {
   // ---- 面接の記録（SQL 20261121000000 の実行後に使える） ----
   evaluation: Evaluation | null;
   has_record: boolean;
+  // ---- 代表者の確認（SQL 20261122000000 の実行後に使える。未実行なら null） ----
+  acknowledged: boolean | null;
 };
 
 /** 新しい列がまだない（SQL 未実行）ときのエラーか */
@@ -276,20 +278,22 @@ export async function listReservations(storeId: string, fromIso: string): Promis
     canceled_reason: string | null;
     employees: unknown;
     interview_record?: unknown;
+    acknowledged_at?: string | null;
   };
-  let res: { data: Row[] | null; error: { code?: string; message: string } | null } = await db()
-    .from("reservations")
-    .select(`${RESERVATION_COLUMNS}, interview_record`)
-    .eq("store_id", storeId)
-    .gte("interview_at", fromIso)
-    .order("interview_at");
-  if (res.error && isMissingColumn(res.error)) {
-    res = await db()
+  type Result = { data: Row[] | null; error: { code?: string; message: string } | null };
+  const query = (columns: string): PromiseLike<Result> =>
+    db()
       .from("reservations")
-      .select(RESERVATION_COLUMNS)
+      .select(columns)
       .eq("store_id", storeId)
       .gte("interview_at", fromIso)
-      .order("interview_at");
+      .order("interview_at") as unknown as PromiseLike<Result>;
+
+  // 追加の列（SQL を実行したものだけ）を順に試す。足りない列があれば、1つ前の読み方に戻る
+  let res: Result = { data: null, error: { message: "未実行" } };
+  for (const extra of [", interview_record, acknowledged_at", ", interview_record", ""]) {
+    res = await query(RESERVATION_COLUMNS + extra);
+    if (!(res.error && isMissingColumn(res.error))) break;
   }
   const { data, error } = res;
   if (error || !data) {
@@ -314,6 +318,8 @@ export async function listReservations(storeId: string, fromIso: string): Promis
       canceled_reason: r.canceled_reason,
       evaluation: record?.evaluation ?? null,
       has_record: record !== null && (record.completed || record.answers.some(hasAnswer)),
+      // 確認の記録（SQL 20261122000000）がなければ null
+      acknowledged: r.acknowledged_at === undefined ? null : r.acknowledged_at !== null,
     };
   });
 }
@@ -345,6 +351,7 @@ async function listReservationsLegacy(storeId: string, fromIso: string): Promise
         canceled_reason: null,
         evaluation: null,
         has_record: false,
+        acknowledged: null,
       };
     })
     .sort((a, b) => a.start_at.localeCompare(b.start_at));

@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { ActionForm, SubmitButton } from "@/components/action-form";
+import { acknowledgeReservations } from "./actions";
 import { STATUS_LABEL } from "@/lib/progress";
 import { formatDateShort } from "@/lib/time";
 import type { CalendarReservation } from "./reservation-calendar";
 
 const NEW_BOOKING_HOURS = 48; // reservation-data.ts と同じ（表示用）
-
 
 /** 「3時間前」「昨日」のような、予約が入った時期 */
 function ago(iso: string, now: number): string {
@@ -25,18 +26,27 @@ export function TodayInterviews({ list }: { list: CalendarReservation[] }) {
           <span className="inline-block size-1.5 bg-ink" aria-hidden />
           今日の面接
         </span>
-        <span className="num text-xs font-normal text-gray">{list.length}件</span>
+        <span className="num text-xs font-normal text-gray">
+          {list.length}件
+        </span>
       </h2>
       {list.length === 0 ? (
         <p className="px-4 py-3 text-sm text-gray">今日の面接はありません。</p>
       ) : (
         <ul>
           {list.map((r) => (
-            <li key={r.id} className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0">
-              <span className="num w-12 shrink-0 text-lg leading-tight font-bold">{r.start}</span>
+            <li
+              key={r.id}
+              className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0"
+            >
+              <span className="num w-12 shrink-0 text-lg leading-tight font-bold">
+                {r.start}
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-bold">{r.name} さん</span>
-                <span className="block text-xs text-gray">担当：{r.interviewer ?? "未定"}</span>
+                <span className="block text-xs text-gray">
+                  担当：{r.interviewer ?? "未定"}
+                </span>
               </span>
               {r.status === "booked" ? (
                 <Link
@@ -61,37 +71,111 @@ export function TodayInterviews({ list }: { list: CalendarReservation[] }) {
   );
 }
 
-/** ホームの上：この48時間に入った予約（新しい順） */
-export function NewBookings({ list, now }: { list: CalendarReservation[]; now: number }) {
+/**
+ * ホームの上：新しい予約（新しい順）。
+ * 代表者が「確認」を押すと、この一覧から外れる（確認の記録はデータベースに残るので、どのスマホでも同じ）。
+ */
+export function NewBookings({
+  list,
+  now,
+  canAcknowledge,
+}: {
+  list: CalendarReservation[];
+  now: number;
+  canAcknowledge: boolean;
+}) {
   return (
     <section className="border border-ink bg-white">
       <h2 className="flex items-center justify-between border-b border-ink px-4 py-3 text-sm font-bold">
         <span className="flex items-center gap-2">
           <span className="inline-block size-1.5 bg-ink" aria-hidden />
           新しい予約
-          <span className="text-xs font-normal text-gray">（この{NEW_BOOKING_HOURS}時間）</span>
+          <span className="text-xs font-normal text-gray">
+            {canAcknowledge
+              ? "（代表者の確認待ち）"
+              : `（この${NEW_BOOKING_HOURS}時間）`}
+          </span>
         </span>
-        <span className="num text-xs font-normal text-gray">{list.length}件</span>
+        <span className="num text-xs font-normal text-gray">
+          {list.length}件
+        </span>
       </h2>
       {list.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-gray">新しい予約はありません。</p>
+        <p className="px-4 py-3 text-sm text-gray">
+          {canAcknowledge
+            ? "確認が必要な新しい予約はありません。"
+            : "新しい予約はありません。"}
+        </p>
       ) : (
-        <ul>
-          {list.map((r) => (
-            <li key={r.id} className="border-b border-line last:border-b-0">
-              <Link href={`/admin?d=${r.date}`} className="flex min-h-14 items-center gap-3 px-4 py-2">
-                <span className="bg-ink px-1.5 py-0.5 text-[10px] font-bold text-white">NEW</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-bold">{r.name} さん</span>
-                  <span className="num block text-xs text-gray">
-                    面接 {formatDateShort(r.date)} {r.start}〜
+        <>
+          <ul>
+            {list.map((r) => (
+              <li
+                key={r.id}
+                className="flex items-center gap-2 border-b border-line pr-3 last:border-b-0"
+              >
+                <Link
+                  href={`/admin?d=${r.date}`}
+                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 pl-4"
+                >
+                  <span className="bg-ink px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    NEW
                   </span>
-                </span>
-                <span className="shrink-0 text-xs text-gray">{ago(r.createdAt, now)}に予約</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-bold">
+                      {r.name} さん
+                    </span>
+                    <span className="num block text-xs text-gray">
+                      面接 {formatDateShort(r.date)} {r.start}〜
+                    </span>
+                    <span className="block text-[11px] text-gray">
+                      {ago(r.createdAt, now)}に予約
+                    </span>
+                  </span>
+                </Link>
+                {canAcknowledge && (
+                  <ActionForm
+                    action={acknowledgeReservations}
+                    silentSuccess
+                    className="shrink-0"
+                  >
+                    <input type="hidden" name="id" value={r.id} />
+                    <SubmitButton
+                      variant="outline"
+                      className="min-h-11! px-3! text-sm"
+                      pendingText="…"
+                    >
+                      確認
+                    </SubmitButton>
+                  </ActionForm>
+                )}
+              </li>
+            ))}
+          </ul>
+          {canAcknowledge && list.length > 1 && (
+            <ActionForm
+              action={acknowledgeReservations}
+              confirm={`新しい予約${list.length}件を、まとめて確認済みにしますか？`}
+              className="border-t border-ink p-3"
+            >
+              {list.map((r) => (
+                <input key={r.id} type="hidden" name="id" value={r.id} />
+              ))}
+              <SubmitButton
+                variant="ink"
+                className="w-full text-sm"
+                pendingText="確認しています…"
+              >
+                {list.length}件をまとめて確認
+              </SubmitButton>
+            </ActionForm>
+          )}
+          {canAcknowledge && (
+            <p className="border-t border-line px-4 py-2 text-[11px] text-gray">
+              代表者が内容を確認したら「確認」を押してください。この一覧から外れます。
+            </p>
+          )}
+        </>
       )}
     </section>
   );

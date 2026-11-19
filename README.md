@@ -39,9 +39,10 @@ supabase/seed.sql         デモ用データ
    4. `supabase/migrations/20261119000000_interview_guide.sql`（面接の進め方）
    5. `supabase/migrations/20261120000000_reservation_progress.sql`（面接後の進み具合）
    6. `supabase/migrations/20261121000000_interview_record.sql`（面接の記録）
-   7. `supabase/seed.sql`（デモ店舗データ）
+   7. `supabase/migrations/20261122000000_booking_ack.sql`（新しい予約の代表者の確認）
+   8. `supabase/seed.sql`（デモ店舗データ）
 
-   > 2〜7 は何回実行しても大丈夫です。途中まで実行済みなら、続きから実行してください。
+   > 2〜8 は何回実行しても大丈夫です。途中まで実行済みなら、続きから実行してください。
 3. **Project Settings** から次の2つを控えます
    - **Data API → Project URL** … `SUPABASE_URL`
    - **API Keys → Secret key**（`sb_secret_` で始まるもの）… `SUPABASE_SECRET_KEY`

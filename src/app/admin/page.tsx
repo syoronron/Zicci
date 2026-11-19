@@ -15,7 +15,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   if (!isDatabaseConfigured()) return <SetupNotice />;
   const store = await getStore();
   if (!store) return null;
-  const { today, now, calendar, waiting, todays, fresh } = await loadReservations(store);
+  const { today, now, calendar, waiting, todays, fresh, canAcknowledge } = await loadReservations(store);
 
   return (
     <>
@@ -24,7 +24,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
       </PageHeader>
       <div className="space-y-4">
         <TodayInterviews list={todays} />
-        <NewBookings list={fresh} now={now} />
+        <NewBookings list={fresh} now={now} canAcknowledge={canAcknowledge} />
         <WaitingList waiting={waiting} today={today} />
         <ReservationCalendar
           // 結果待ちの一覧から日付を選んだとき（?d= が変わったとき）に、その日を開き直す
