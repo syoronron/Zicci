@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { dayLabel, MonthGrid } from "@/components/month-grid";
 import { TIME_OPTIONS } from "@/components/time-select";
 import { EVALUATION_LABEL, type Evaluation } from "@/lib/interview-record";
 import {
@@ -41,32 +42,6 @@ export type CalendarReservation = {
   hasRecord: boolean;
 };
 
-const WEEK = ["月", "火", "水", "木", "金", "土", "日"];
-
-/** "YYYY-MM" の月の、カレンダーに並べる日付（月曜始まり。前後の空きは null） */
-function monthCells(month: string): (string | null)[] {
-  const [y, m] = month.split("-").map(Number);
-  const first = new Date(Date.UTC(y, m - 1, 1));
-  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const lead = (first.getUTCDay() + 6) % 7; // 月曜=0
-  const cells: (string | null)[] = Array.from({ length: lead }, () => null);
-  for (let d = 1; d <= days; d++)
-    cells.push(`${month}-${String(d).padStart(2, "0")}`);
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
-}
-
-function shiftMonth(month: string, delta: number): string {
-  const [y, m] = month.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-function dayLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日（${["日", "月", "火", "水", "木", "金", "土"][d.getUTCDay()]}）`;
-}
-
 const shortDate = (date: string) =>
   `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`;
 
@@ -81,10 +56,13 @@ const BADGE: Record<ReservationStatus, string> = {
 /** 予約のカレンダー。日付をタップすると、その日の予約が時間順に並ぶ */
 export function ReservationCalendar({
   reservations,
+  openSlots = {},
   today,
   initialDate,
 }: {
   reservations: CalendarReservation[];
+  /** 日付ごとの、予約が入っていない公開中の面接枠（開始時刻） */
+  openSlots?: Record<string, string[]>;
   today: string;
   initialDate?: string;
 }) {
@@ -102,7 +80,7 @@ export function ReservationCalendar({
     .slice()
     .sort((a, b) => a.start.localeCompare(b.start));
   const upcomingCount = active.filter((r) => r.date >= today).length;
-  const [y, m] = month.split("-").map(Number);
+  const openList = openSlots[selected] ?? [];
 
   return (
     <section className="border border-ink bg-white">
@@ -117,90 +95,27 @@ export function ReservationCalendar({
         </span>
       </div>
 
-      {/* 月の切り替え */}
-      <div className="flex items-center justify-between px-2 pt-2">
-        <button
-          type="button"
-          onClick={() => setMonth(shiftMonth(month, -1))}
-          className="num flex size-10 items-center justify-center border border-ink"
-          aria-label="前の月"
-        >
-          ←
-        </button>
-        <span className="num text-base font-bold" data-testid="month">
-          {y}年{m}月
-        </span>
-        <button
-          type="button"
-          onClick={() => setMonth(shiftMonth(month, 1))}
-          className="num flex size-10 items-center justify-center border border-ink"
-          aria-label="次の月"
-        >
-          →
-        </button>
-      </div>
-
-      {/* カレンダー */}
+      {/* カレンダー（予約の数・空き枠がある日に印） */}
       <div className="px-2 pt-2 pb-3">
-        <div className="grid grid-cols-7 text-center text-[11px] text-gray">
-          {WEEK.map((w, i) => (
-            <span
-              key={w}
-              className={`py-1 ${i === 5 ? "text-[#2f5d9e]" : i === 6 ? "text-danger" : ""}`}
-            >
-              {w}
-            </span>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {monthCells(month).map((date, i) => {
-            if (!date) return <span key={`blank-${i}`} />;
-            const count = (byDate.get(date) ?? []).filter(
-              (r) => r.status !== "canceled",
-            ).length;
-            const isSelected = date === selected;
-            const isToday = date === today;
-            const past = date < today;
-            return (
-              <button
-                key={date}
-                type="button"
-                onClick={() => setSelected(date)}
-                aria-pressed={isSelected}
-                aria-label={`${dayLabel(date)} 予約${count}件`}
-                className={`relative flex h-14 flex-col items-center justify-start border pt-1 ${
-                  isSelected
-                    ? "border-ink bg-ink text-white"
-                    : isToday
-                      ? "border-ink bg-white"
-                      : "border-line bg-white"
-                } ${past && !isSelected ? "text-mist" : ""}`}
-              >
-                <span className="num text-sm leading-none font-semibold">
-                  {Number(date.slice(8))}
-                </span>
-                {isToday && !isSelected && (
-                  <span className="mt-0.5 text-[9px] leading-none font-bold">
-                    今日
-                  </span>
-                )}
-                {count > 0 && (
-                  <span
-                    className={`num absolute right-1 bottom-1 left-1 py-0.5 text-[10px] leading-none font-bold ${
-                      isSelected
-                        ? "bg-white text-ink"
-                        : past
-                          ? "bg-line text-gray"
-                          : "bg-ink text-white"
-                    }`}
-                  >
-                    {count}件
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <MonthGrid
+          month={month}
+          onMonthChange={setMonth}
+          selected={selected}
+          onSelect={setSelected}
+          today={today}
+          badge={(date) => {
+            const count = (byDate.get(date) ?? []).filter((r) => r.status !== "canceled").length;
+            return count > 0 ? { text: `${count}件`, tone: "ink" } : null;
+          }}
+          mark={(date) => (openSlots[date]?.length ?? 0) > 0}
+          labelFor={(date) =>
+            `${dayLabel(date)} 予約${(byDate.get(date) ?? []).filter((r) => r.status !== "canceled").length}件 空き枠${openSlots[date]?.length ?? 0}件`
+          }
+        />
+        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-gray">
+          <span className="inline-block size-2 rounded-full border border-ink" aria-hidden />
+          空いている面接枠がある日
+        </p>
       </div>
 
       {/* 選んだ日の予約 */}
@@ -220,6 +135,24 @@ export function ReservationCalendar({
             ))}
           </ol>
         )}
+
+        {/* その日の、まだ予約が入っていない面接枠 */}
+        <div className="mt-4 border-t border-line pt-3">
+          <p className="text-xs font-bold">
+            空いている面接枠 <span className="num font-normal text-gray">{openList.length}件</span>
+          </p>
+          {openList.length === 0 ? (
+            <p className="mt-1 text-xs text-gray">この日に予約できる面接枠はありません。</p>
+          ) : (
+            <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="空いている面接枠">
+              {openList.map((t) => (
+                <li key={t} className="num border border-ink bg-white px-2.5 py-1 text-sm font-semibold">
+                  {t}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </section>
   );

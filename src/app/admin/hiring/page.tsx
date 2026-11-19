@@ -14,7 +14,7 @@ import {
   listSlots,
 } from "@/lib/data/store";
 import { dueInfo } from "@/lib/progress";
-import { addDays, formatDateShort, mondayOf, todayJst } from "@/lib/time";
+import { addDays, formatDateShort, todayJst } from "@/lib/time";
 import { loadReservations } from "../reservation-data";
 
 /** 準備や予約を見る期間（今日から2週間） */
@@ -48,7 +48,7 @@ export default async function HiringPage() {
   const upcomingShifts = shifts.filter((s) => interviewerIds.has(s.employee_id));
   const interviewerShifts = upcomingShifts.length;
   // 面接枠は、一番近い面接担当のシフトがある週を開く
-  const slotsHref = upcomingShifts[0] ? `/admin/slots?week=${mondayOf(upcomingShifts[0].date)}` : "/admin/slots";
+  const slotsHref = upcomingShifts[0] ? `/admin/slots?d=${upcomingShifts[0].date}` : "/admin/slots";
   const draft = slots.filter((s) => s.status === "draft" && !s.reserved).length;
   const upcoming = res.calendar.filter((r) => r.date >= today && r.status !== "canceled");
   const todays = res.calendar

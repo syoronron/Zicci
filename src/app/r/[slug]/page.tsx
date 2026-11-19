@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { getChangePrefill, getStoreBySlug, isDatabaseConfigured, listBookableSlots } from "@/lib/data/store";
-import { formatDateShort, formatPhone, formatTime, toJst, weekdayLabel, weekdayOf } from "@/lib/time";
+import { formatDateShort, formatPhone, formatTime, todayJst, toJst, weekdayLabel, weekdayOf } from "@/lib/time";
 import { ApplicantShell } from "./applicant-shell";
 import { BookingForm, type BookingDay } from "./booking-form";
 
@@ -69,6 +69,7 @@ async function Booking({
         <BookingForm
           slug={store.public_slug}
           days={days}
+          today={todayJst()}
           prefill={prefill ? { ...prefill, phone: prefill.phone ? formatPhone(prefill.phone) : "" } : undefined}
         />
       )}

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
+import { MonthGrid } from "@/components/month-grid";
 import { reserve } from "./actions";
 
 export type BookingDay = {
@@ -18,9 +19,12 @@ export function BookingForm({
   slug,
   days,
   prefill,
+  today,
 }: {
   slug: string;
   days: BookingDay[];
+  /** 今日（日本時間）。カレンダーの「今日」の印に使う */
+  today: string;
   /** 日時変更のときに、前回のお名前・連絡先を入れておく */
   prefill?: { name: string; phone: string; email: string };
 }) {
@@ -30,6 +34,10 @@ export function BookingForm({
 
   // 空き状況が更新されて、選んでいた日や時間がなくなった場合に備える
   const day = days.find((d) => d.date === date) ?? days[0];
+  const byDate = new Map(days.map((d) => [d.date, d]));
+  const firstMonth = days[0]?.date.slice(0, 7) ?? "";
+  const lastMonth = days.at(-1)?.date.slice(0, 7) ?? "";
+  const [month, setMonth] = useState(firstMonth);
   const slot = day?.slots.find((s) => s.id === slotId) ?? null;
 
   if (!day) return null;
@@ -37,39 +45,27 @@ export function BookingForm({
   return (
     <>
       <h2 className="mt-6 text-sm font-bold">日付を選ぶ</h2>
-      <ul
-        className="-mx-5 mt-2 flex gap-1.5 overflow-x-auto px-5 pb-1"
-        aria-label="日付"
-      >
-        {days.map((d, i) => {
-          const active = d.date === day.date;
-          const showMonth = i === 0 || days[i - 1].month !== d.month;
-          return (
-            <li key={d.date} className="shrink-0">
-              <button
-                type="button"
-                aria-pressed={active}
-                aria-label={d.label}
-                onClick={() => {
-                  setDate(d.date);
-                  setSlotId(null);
-                }}
-                className={`flex h-16 w-14 flex-col items-center justify-center border border-ink ${
-                  active ? "bg-ink text-white" : "bg-white"
-                }`}
-              >
-                <span className="text-[10px] leading-none">
-                  {showMonth ? `${d.month}月` : " "}
-                </span>
-                <span className="num text-lg leading-tight font-bold">
-                  {d.day}
-                </span>
-                <span className="text-[10px] leading-none">{d.weekday}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <p className="mt-0.5 text-xs text-gray">数字の入っている日が、予約できる日です。</p>
+      <div className="mt-2 border border-ink bg-white p-2">
+        <MonthGrid
+          month={month}
+          onMonthChange={setMonth}
+          canPrev={month > firstMonth}
+          canNext={month < lastMonth}
+          selected={day.date}
+          onSelect={(d) => {
+            setDate(d);
+            setSlotId(null);
+          }}
+          today={today}
+          disabled={(d) => !byDate.has(d)}
+          badge={(d) => {
+            const n = byDate.get(d)?.slots.length ?? 0;
+            return n > 0 ? { text: `空${n}`, tone: "ink" } : null;
+          }}
+          labelFor={(d) => (byDate.has(d) ? `${byDate.get(d)!.label} 空き${byDate.get(d)!.slots.length}件` : `${d} 予約できません`)}
+        />
+      </div>
 
       <h2 className="mt-6 text-sm font-bold">
         時間を選ぶ <span className="font-normal text-gray">{day.label}</span>

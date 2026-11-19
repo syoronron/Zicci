@@ -1,6 +1,6 @@
 import "server-only";
 
-import { listReservations, type Store } from "@/lib/data/store";
+import { listBookableSlots, listReservations, type Store } from "@/lib/data/store";
 import { bookingUrl } from "@/lib/site-url";
 import { addDays, formatPhone, formatTime, jstToDate, todayJst, toJst } from "@/lib/time";
 import type { CalendarReservation } from "./reservation-calendar";
@@ -14,10 +14,17 @@ export const NEW_BOOKING_HOURS = 48;
  */
 export async function loadReservations(store: Store) {
   const today = todayJst();
-  const [reservations, url] = await Promise.all([
+  const [reservations, url, bookable] = await Promise.all([
     listReservations(store.id, jstToDate(addDays(today, -31), 0).toISOString()),
     bookingUrl(store.public_slug),
+    listBookableSlots(store.id),
   ]);
+  // 日付ごとの、応募者がいま予約できる面接枠（開始時刻）
+  const openSlots: Record<string, string[]> = {};
+  for (const slot of bookable) {
+    const t = toJst(slot.start_at);
+    (openSlots[t.date] ??= []).push(formatTime(t.minutes));
+  }
   const origin = new URL(url).origin;
 
   const calendar: CalendarReservation[] = reservations.map((r) => {
@@ -71,5 +78,5 @@ export async function loadReservations(store: Store) {
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  return { today, now, calendar, waiting, todays, fresh, canAcknowledge, bookingUrl: url };
+  return { today, now, calendar, waiting, todays, fresh, canAcknowledge, openSlots, bookingUrl: url };
 }

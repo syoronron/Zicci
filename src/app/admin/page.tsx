@@ -15,7 +15,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   if (!isDatabaseConfigured()) return <SetupNotice />;
   const store = await getStore();
   if (!store) return null;
-  const { today, now, calendar, waiting, todays, fresh, canAcknowledge } = await loadReservations(store);
+  const { today, now, calendar, waiting, todays, fresh, canAcknowledge, openSlots } = await loadReservations(store);
 
   return (
     <>
@@ -30,6 +30,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
           // 結果待ちの一覧から日付を選んだとき（?d= が変わったとき）に、その日を開き直す
           key={typeof d === "string" ? d : "today"}
           reservations={calendar}
+          openSlots={openSlots}
           today={today}
           initialDate={
             typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)
