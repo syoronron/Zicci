@@ -231,8 +231,8 @@ function ReservationItem({
   today: string;
 }) {
   const canceled = r.status === "canceled";
-  // 結果が出た人（採用・見送り）は、最初は折りたたんでおく
-  const decided = r.status === "passed" || r.status === "rejected";
+  // 結果が出た人（採用・見送り）と辞退した人は、最初は折りたたんでおく
+  const decided = r.status === "passed" || r.status === "rejected" || canceled;
   const [open, setOpen] = useState(!decided);
   return (
     <li
@@ -283,7 +283,11 @@ function ReservationItem({
           <p className="mt-0.5 text-xs text-gray">
             {r.status === "passed"
               ? `初出勤：${r.firstDayDate ? `${shortDate(r.firstDayDate)} ${r.firstDayTime ?? ""}` : "未定"}`
-              : "お礼のメッセージを表示中"}
+              : r.status === "rejected"
+                ? "お礼のメッセージを表示中"
+                : r.canceledReason === "日時変更"
+                  ? "日時の変更のため取り消し（枠は空いています）"
+                  : "応募者が辞退（枠は空いています）"}
             {r.evaluation && `　評価：${EVALUATION_LABEL[r.evaluation]}`}
           </p>
         )}
