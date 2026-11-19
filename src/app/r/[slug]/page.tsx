@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { getStoreBySlug, isDatabaseConfigured, listBookableSlots } from "@/lib/data/store";
-import { formatDateShort, formatTime, toJst, weekdayLabel, weekdayOf } from "@/lib/time";
+import { getChangePrefill, getStoreBySlug, isDatabaseConfigured, listBookableSlots } from "@/lib/data/store";
+import { formatDateShort, formatPhone, formatTime, toJst, weekdayLabel, weekdayOf } from "@/lib/time";
 import { ApplicantShell } from "./applicant-shell";
 import { BookingForm, type BookingDay } from "./booking-form";
 
@@ -22,12 +22,15 @@ async function Booking({
   searchParams: PageProps<"/r/[slug]">["searchParams"];
 }) {
   await connection();
-  const [{ slug }, { changed }] = await Promise.all([params, searchParams]);
+  const [{ slug }, { changed, from }] = await Promise.all([params, searchParams]);
   if (!isDatabaseConfigured()) notFound();
   const store = await getStoreBySlug(slug);
   if (!store) notFound();
 
-  const slots = await listBookableSlots(store.id);
+  const [slots, prefill] = await Promise.all([
+    listBookableSlots(store.id),
+    typeof from === "string" ? getChangePrefill(store.id, from) : Promise.resolve(null),
+  ]);
   const days: BookingDay[] = [];
   for (const s of slots) {
     const start = toJst(s.start_at);
@@ -53,6 +56,7 @@ async function Booking({
       {changed === "1" && (
         <p role="status" className="mt-6 border border-dashed border-ink bg-white p-3 text-sm">
           前の予約を取り消しました。新しい日時を選んでください。
+          {prefill && "お名前と連絡先は、前回の内容を入れてあります。"}
         </p>
       )}
       <h1 className="mt-6 text-2xl font-bold">面接の日時を選んでください</h1>
@@ -62,7 +66,11 @@ async function Booking({
           <p className="mt-1 text-gray">時間をおいてもう一度ご確認いただくか、お店に直接お問い合わせください。</p>
         </div>
       ) : (
-        <BookingForm slug={store.public_slug} days={days} />
+        <BookingForm
+          slug={store.public_slug}
+          days={days}
+          prefill={prefill ? { ...prefill, phone: prefill.phone ? formatPhone(prefill.phone) : "" } : undefined}
+        />
       )}
     </ApplicantShell>
   );

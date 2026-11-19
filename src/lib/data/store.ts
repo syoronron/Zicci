@@ -420,3 +420,30 @@ export async function getReservationBrief(
   const slot = data.interview_slots as unknown as { start_at: string } | null;
   return slot ? { name: data.applicant_name, start_at: slot.start_at } : null;
 }
+
+/**
+ * 日時変更で予約を取り直すときの自動入力用：元の予約のお名前・連絡先。
+ * 応募者専用の値（status_token）を知っている本人だけが使える。
+ * 個人情報なので「日時変更」で取り消した予約で、取り消してから24時間以内に限る。
+ */
+export async function getChangePrefill(
+  storeId: string,
+  token: string,
+): Promise<{ name: string; phone: string; email: string } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(token)) return null;
+  const since = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+  const { data, error } = await db()
+    .from("reservations")
+    .select("applicant_name, phone, email")
+    .eq("store_id", storeId)
+    .eq("status_token", token)
+    .eq("status", "canceled")
+    .eq("canceled_reason", "日時変更")
+    .gte("updated_at", since)
+    .maybeSingle();
+  if (error) {
+    if (isMissingColumn(error)) return null;
+    fail("予約", error);
+  }
+  return data ? { name: data.applicant_name, phone: data.phone ?? "", email: data.email ?? "" } : null;
+}

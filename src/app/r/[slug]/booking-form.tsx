@@ -17,9 +17,12 @@ export type BookingDay = {
 export function BookingForm({
   slug,
   days,
+  prefill,
 }: {
   slug: string;
   days: BookingDay[];
+  /** 日時変更のときに、前回のお名前・連絡先を入れておく */
+  prefill?: { name: string; phone: string; email: string };
 }) {
   const [date, setDate] = useState(days[0]?.date ?? "");
   const [slotId, setSlotId] = useState<string | null>(null);
@@ -132,6 +135,7 @@ export function BookingForm({
                     autoComplete="name"
                     required
                     maxLength={30}
+                    defaultValue={prefill?.name}
                   />
                 </div>
                 <div>
@@ -147,6 +151,7 @@ export function BookingForm({
                     placeholder="090-1234-5678"
                     className="field num"
                     required
+                    defaultValue={prefill?.phone}
                   />
                 </div>
                 <div>
@@ -160,6 +165,7 @@ export function BookingForm({
                     autoComplete="email"
                     className="field"
                     maxLength={100}
+                    defaultValue={prefill?.email}
                   />
                 </div>
                 {/* ロボットよけ：画面には表示しない */}

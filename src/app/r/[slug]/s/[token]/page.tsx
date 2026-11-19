@@ -47,7 +47,11 @@ async function Status({ params }: PageProps<"/r/[slug]/s/[token]">) {
             {formatDateShort(start.date)} {formatTime(start.minutes)} の予約は取り消されています。
           </p>
           <Link
-            href={`/r/${s.store.public_slug}`}
+            href={
+              s.canceled_reason === "日時変更"
+                ? `/r/${s.store.public_slug}?changed=1&from=${token}`
+                : `/r/${s.store.public_slug}`
+            }
             className="mt-4 flex min-h-12 items-center justify-center border border-ink bg-white font-bold"
           >
             面接の日時を選び直す

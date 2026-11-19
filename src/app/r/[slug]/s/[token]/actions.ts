@@ -44,7 +44,7 @@ export async function cancelByApplicant(_: ActionState, formData: FormData): Pro
     refresh();
     return failure("面接の時間を過ぎたか、すでに手続き済みのため、変更できません。お店に直接ご連絡ください。");
   }
-  if (mode === "change") redirect(`/r/${slug}?changed=1`);
+  if (mode === "change") redirect(`/r/${slug}?changed=1&from=${token}`);
   refresh();
   return { ok: true, message: "面接を辞退しました。ご連絡ありがとうございました。" };
 }
