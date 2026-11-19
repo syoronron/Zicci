@@ -5,6 +5,9 @@ import { bookingUrl } from "@/lib/site-url";
 import { addDays, formatPhone, formatTime, jstToDate, todayJst, toJst } from "@/lib/time";
 import type { CalendarReservation } from "./reservation-calendar";
 
+/** 新しい予約として表示する期間（予約が入ってから） */
+export const NEW_BOOKING_HOURS = 48;
+
 /**
  * 予約カレンダーと「結果の連絡を待っている人」に使うデータ。
  * 31日前以降に面接がある予約（先月面接して選考中の人も含める）。
@@ -36,6 +39,7 @@ export async function loadReservations(store: Store) {
       firstDayTime: r.first_day_at ? formatTime(toJst(r.first_day_at).minutes) : null,
       statusUrl: r.status_token ? `${origin}/r/${store.public_slug}/s/${r.status_token}` : null,
       canceledReason: r.canceled_reason,
+      createdAt: r.created_at,
       evaluation: r.evaluation,
       hasRecord: r.has_record,
     };
@@ -46,5 +50,19 @@ export async function loadReservations(store: Store) {
     .filter((r) => r.status === "interviewed" && r.resultDue)
     .sort((a, b) => (a.resultDue ?? "").localeCompare(b.resultDue ?? ""));
 
-  return { today, calendar, waiting, bookingUrl: url };
+  // 今日の面接（取り消しを除く・時間順）
+  const todays = calendar
+    .filter((r) => r.date === today && r.status !== "canceled")
+    .sort((a, b) => a.start.localeCompare(b.start));
+
+  // 新しい予約：この48時間に入った、これからの面接（新しい順）
+  const now = Date.now();
+  const fresh = calendar
+    .filter(
+      (r) =>
+        r.status !== "canceled" && r.date >= today && now - Date.parse(r.createdAt) <= NEW_BOOKING_HOURS * 60 * 60_000,
+    )
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  return { today, now, calendar, waiting, todays, fresh, bookingUrl: url };
 }

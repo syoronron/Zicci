@@ -35,6 +35,7 @@ export type CalendarReservation = {
   firstDayTime: string | null;
   statusUrl: string | null; // 応募者専用ページ
   canceledReason: string | null;
+  createdAt: string; // 予約が入った日時（ISO）
   evaluation: Evaluation | null; // 面接の総合評価
   hasRecord: boolean;
 };
