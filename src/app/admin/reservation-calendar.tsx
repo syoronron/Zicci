@@ -404,13 +404,28 @@ function ReservationItem({
             )}
 
             {(r.status === "passed" || r.status === "rejected") && (
-              <ActionForm action={setResult} silentSuccess className="mt-1">
-                <input type="hidden" name="id" value={r.id} />
-                <input type="hidden" name="result" value="interviewed" />
-                <SubmitButton variant="quiet" pendingText="…">
-                  選考中に戻す
-                </SubmitButton>
-              </ActionForm>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <ActionForm action={setResult} silentSuccess>
+                  <input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="result" value="interviewed" />
+                  <SubmitButton variant="quiet" pendingText="…">
+                    選考中に戻す
+                  </SubmitButton>
+                </ActionForm>
+                {/* 採用した人を画面から消す（予約・面接の記録ごと削除） */}
+                {r.status === "passed" && (
+                  <ActionForm
+                    action={cancelReservation}
+                    confirm={`${r.name}さんを一覧から削除しますか？面接の記録も消え、元に戻せません。応募者のページも見られなくなります。`}
+                    silentSuccess
+                  >
+                    <input type="hidden" name="id" value={r.id} />
+                    <SubmitButton variant="danger" pendingText="…">
+                      取り消す
+                    </SubmitButton>
+                  </ActionForm>
+                )}
+              </div>
             )}
 
             {r.hasRecord && !canceled && (
