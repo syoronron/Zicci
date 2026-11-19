@@ -5,7 +5,7 @@ import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/action-form";
 import { TIME_OPTIONS } from "@/components/time-select";
 import { dueInfo, milestones, STATUS_LABEL, type ReservationStatus } from "@/lib/progress";
-import { cancelReservation, markInterviewed, setFirstDay, setResult } from "./actions";
+import { cancelReservation, deleteCanceledReservation, markInterviewed, setFirstDay, setResult } from "./actions";
 
 export type CalendarReservation = {
   id: string;
@@ -184,7 +184,7 @@ export function ReservationCalendar({
 function ReservationItem({ r, today }: { r: CalendarReservation; today: string }) {
   const canceled = r.status === "canceled";
   return (
-    <li className={`grid grid-cols-[3.5rem_1fr] gap-3 ${canceled ? "opacity-60" : ""}`}>
+    <li className={`grid grid-cols-[3.5rem_1fr] gap-3 ${canceled ? "text-gray" : ""}`}>
       <div className="num border-r border-ink pr-2 text-right">
         <p className={`text-lg leading-tight font-bold ${canceled ? "line-through" : ""}`}>{r.start}</p>
         <p className="text-[11px] text-gray">〜{r.end}</p>
@@ -210,9 +210,22 @@ function ReservationItem({ r, today }: { r: CalendarReservation; today: string }
         )}
 
         {canceled && (
-          <p className="mt-1 text-sm">
-            応募者が{r.canceledReason === "日時変更" ? "日時の変更のため取り消しました" : "辞退しました"}（枠は空いています）
-          </p>
+          <div className="mt-1 flex items-start justify-between gap-2">
+            <p className="text-sm">
+              応募者が{r.canceledReason === "日時変更" ? "日時の変更のため取り消しました" : "辞退しました"}（枠は空いています）
+            </p>
+            <ActionForm
+              action={deleteCanceledReservation}
+              confirm={`${r.name}さんの取り消された予約を、一覧から削除しますか？`}
+              silentSuccess
+              className="shrink-0"
+            >
+              <input type="hidden" name="id" value={r.id} />
+              <SubmitButton variant="danger" pendingText="…">
+                削除
+              </SubmitButton>
+            </ActionForm>
+          </div>
         )}
 
         {/* 選考中：結果連絡の期限 */}

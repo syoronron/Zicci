@@ -627,3 +627,22 @@ export async function updateAfterSettings(_: ActionState, formData: FormData): P
   refresh();
   return success("面接後の案内を保存しました。");
 }
+
+/** 応募者が辞退・日時変更で取り消した予約を、一覧から削除する（取り消し済みの予約だけ） */
+export async function deleteCanceledReservation(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  const parsed = parse(z.object({ id: uuid }), formData);
+  if (parsed.error !== undefined) return failure(parsed.error);
+  const store = await requireStore();
+  const { data, error } = await db()
+    .from("reservations")
+    .delete()
+    .eq("id", parsed.data.id)
+    .eq("store_id", store.id)
+    .eq("status", "canceled")
+    .select("id");
+  if (error) return failure(explain(error));
+  if (data.length === 0) return failure("取り消し済みの予約だけ削除できます。");
+  refresh();
+  return success("取り消された予約を削除しました。");
+}
