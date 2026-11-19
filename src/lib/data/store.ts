@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { parseGuide, type GuideItem } from "@/lib/interview-guide";
+import { isStatus, type ReservationStatus } from "@/lib/progress";
 import { addDays, jstToDate, parseTime } from "@/lib/time";
 
 /**
@@ -237,22 +238,61 @@ export type Reservation = {
   start_at: string;
   end_at: string;
   interviewer_name: string | null;
+  // ---- 面接後の進み具合（SQL 20261120000000 の実行後に使える） ----
+  status: ReservationStatus;
+  result_due: string | null;
+  first_day_at: string | null;
+  status_token: string | null;
+  canceled_reason: string | null;
 };
 
-/** 管理画面向け：指定時刻以降に始まる予約 */
+/** 新しい列がまだない（SQL 未実行）ときのエラーか */
+function isMissingColumn(error: { code?: string; message: string }): boolean {
+  return error.code === "42703" || /column .* does not exist|could not find .* column/i.test(error.message);
+}
+
+/** 管理画面向け：指定時刻以降に面接がある予約（辞退した予約も含む） */
 export async function listReservations(storeId: string, fromIso: string): Promise<Reservation[]> {
   const { data, error } = await db()
     .from("reservations")
     .select(
-      "id, applicant_name, phone, email, created_at, interview_slots!inner(start_at, end_at), employees(name)",
+      "id, applicant_name, phone, email, created_at, interview_at, interview_end_at, status, result_due, first_day_at, status_token, canceled_reason, employees(name)",
     )
+    .eq("store_id", storeId)
+    .gte("interview_at", fromIso)
+    .order("interview_at");
+  if (error) {
+    if (isMissingColumn(error)) return listReservationsLegacy(storeId, fromIso);
+    fail("予約", error);
+  }
+  return data.map((r) => ({
+    id: r.id,
+    applicant_name: r.applicant_name,
+    phone: r.phone,
+    email: r.email,
+    created_at: r.created_at,
+    start_at: r.interview_at,
+    end_at: r.interview_end_at,
+    interviewer_name: (r.employees as unknown as { name: string } | null)?.name ?? null,
+    status: isStatus(r.status) ? r.status : "booked",
+    result_due: r.result_due,
+    first_day_at: r.first_day_at,
+    status_token: r.status_token,
+    canceled_reason: r.canceled_reason,
+  }));
+}
+
+/** SQL 20261120000000 を実行する前の読み方（進み具合なし） */
+async function listReservationsLegacy(storeId: string, fromIso: string): Promise<Reservation[]> {
+  const { data, error } = await db()
+    .from("reservations")
+    .select("id, applicant_name, phone, email, created_at, interview_slots!inner(start_at, end_at), employees(name)")
     .eq("store_id", storeId)
     .gte("interview_slots.start_at", fromIso);
   if (error) fail("予約", error);
   return data
     .map((r) => {
       const slot = r.interview_slots as unknown as { start_at: string; end_at: string };
-      const employee = r.employees as unknown as { name: string } | null;
       return {
         id: r.id,
         applicant_name: r.applicant_name,
@@ -261,10 +301,90 @@ export async function listReservations(storeId: string, fromIso: string): Promis
         created_at: r.created_at,
         start_at: slot.start_at,
         end_at: slot.end_at,
-        interviewer_name: employee?.name ?? null,
+        interviewer_name: (r.employees as unknown as { name: string } | null)?.name ?? null,
+        status: "booked" as const,
+        result_due: null,
+        first_day_at: null,
+        status_token: null,
+        canceled_reason: null,
       };
     })
     .sort((a, b) => a.start_at.localeCompare(b.start_at));
+}
+
+export type AfterSettings = { result_days: number; onboarding_message: string; thanks_message: string };
+
+/** 面接後の案内の設定。SQL 未実行なら null */
+export async function getAfterSettings(storeId: string): Promise<AfterSettings | null> {
+  const { data, error } = await db()
+    .from("stores")
+    .select("result_days, onboarding_message, thanks_message")
+    .eq("id", storeId)
+    .maybeSingle();
+  if (error) {
+    if (isMissingColumn(error)) return null;
+    fail("店舗", error);
+  }
+  return data;
+}
+
+export type ApplicantStatus = {
+  store: PublicStore & AfterSettings;
+  applicant_name: string;
+  status: ReservationStatus;
+  start_at: string;
+  end_at: string;
+  result_due: string | null;
+  first_day_at: string | null;
+  canceled_reason: string | null;
+};
+
+/** 応募者向け：専用URL（status_token）から進み具合を読む。連絡先は返さない */
+export async function getApplicantStatus(slug: string, token: string): Promise<ApplicantStatus | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(token)) return null;
+  const store = await getStoreBySlug(slug);
+  if (!store) return null;
+  const [settings, res] = await Promise.all([
+    getAfterSettings(store.id),
+    db()
+      .from("reservations")
+      .select("applicant_name, status, interview_at, interview_end_at, result_due, first_day_at, canceled_reason")
+      .eq("store_id", store.id)
+      .eq("status_token", token)
+      .maybeSingle(),
+  ]);
+  if (res.error) {
+    if (isMissingColumn(res.error)) return null;
+    fail("予約", res.error);
+  }
+  if (!res.data || !settings) return null;
+  const r = res.data;
+  return {
+    store: { ...store, ...settings },
+    applicant_name: r.applicant_name,
+    status: isStatus(r.status) ? r.status : "booked",
+    start_at: r.interview_at,
+    end_at: r.interview_end_at,
+    result_due: r.result_due,
+    first_day_at: r.first_day_at,
+    canceled_reason: r.canceled_reason,
+  };
+}
+
+/** 予約完了画面から、応募者専用ページの URL を作るための値。SQL 未実行なら null */
+export async function getStatusToken(storeId: string, reservationId: string): Promise<string | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(reservationId)) return null;
+  const { data, error } = await db()
+    .from("reservations")
+    .select("status_token")
+    .eq("id", reservationId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (error) {
+    if (isMissingColumn(error)) return null;
+    fail("予約", error);
+  }
+  return data?.status_token ?? null;
 }
 
 // ---------------------------------------------------------------------

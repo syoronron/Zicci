@@ -6,17 +6,23 @@ import { formatDateShort, formatTime, toJst, weekdayLabel, weekdayOf } from "@/l
 import { ApplicantShell } from "./applicant-shell";
 import { BookingForm, type BookingDay } from "./booking-form";
 
-export default function BookingPage({ params }: PageProps<"/r/[slug]">) {
+export default function BookingPage({ params, searchParams }: PageProps<"/r/[slug]">) {
   return (
     <Suspense fallback={<ApplicantShell>{null}</ApplicantShell>}>
-      <Booking params={params} />
+      <Booking params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Booking({ params }: { params: PageProps<"/r/[slug]">["params"] }) {
+async function Booking({
+  params,
+  searchParams,
+}: {
+  params: PageProps<"/r/[slug]">["params"];
+  searchParams: PageProps<"/r/[slug]">["searchParams"];
+}) {
   await connection();
-  const { slug } = await params;
+  const [{ slug }, { changed }] = await Promise.all([params, searchParams]);
   if (!isDatabaseConfigured()) notFound();
   const store = await getStoreBySlug(slug);
   if (!store) notFound();
@@ -44,6 +50,11 @@ async function Booking({ params }: { params: PageProps<"/r/[slug]">["params"] })
 
   return (
     <ApplicantShell storeName={store.name} address={store.address}>
+      {changed === "1" && (
+        <p role="status" className="mt-6 border border-dashed border-ink bg-white p-3 text-sm">
+          前の予約を取り消しました。新しい日時を選んでください。
+        </p>
+      )}
       <h1 className="mt-6 text-2xl font-bold">面接の日時を選んでください</h1>
       {days.length === 0 ? (
         <div className="mt-6 border border-ink bg-white p-4 text-sm leading-relaxed">

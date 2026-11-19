@@ -33,7 +33,7 @@ export default async function GuideRunPage({ searchParams }: PageProps<"/admin/g
           </Link>
         </div>
       ) : (
-        <GuideRunner items={items} />
+        <GuideRunner items={items} reservationId={reservation ? (r as string) : undefined} />
       )}
     </>
   );

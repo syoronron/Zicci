@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import type { GuideItem } from "@/lib/interview-guide";
+import { markInterviewed } from "../../actions";
 
 /** 面接の現場で使う画面：1項目ずつ大きく表示して、順番に進める */
-export function GuideRunner({ items }: { items: GuideItem[] }) {
+export function GuideRunner({ items, reservationId }: { items: GuideItem[]; reservationId?: string }) {
+  const [result, markAction, marking] = useActionState(markInterviewed, null);
   const [index, setIndex] = useState(0);
   const [finished, setFinished] = useState(false);
   const item = items[index];
@@ -18,6 +20,11 @@ export function GuideRunner({ items }: { items: GuideItem[] }) {
           <span className="inline-block size-4 bg-ink" aria-hidden />
           面接おつかれさまでした
         </p>
+        {reservationId && (
+          <p role="status" className="mt-2 border border-dashed border-ink p-2 text-sm">
+            {marking ? "選考中にしています…" : (result?.message ?? "")}
+          </p>
+        )}
         <p className="mt-2 text-sm text-gray">気づいたことは、忘れないうちに店長に伝えてください。</p>
         <div className="mt-4 grid gap-2">
           <Link href="/admin" className="flex min-h-12 items-center justify-center border border-ink bg-ink font-bold text-white">
@@ -101,7 +108,16 @@ export function GuideRunner({ items }: { items: GuideItem[] }) {
         </button>
         <button
           type="button"
-          onClick={() => (isLast ? setFinished(true) : setIndex((i) => i + 1))}
+          onClick={() => {
+            if (!isLast) return setIndex((i) => i + 1);
+            setFinished(true);
+            // 予約から始めた面接なら、選考中に進めて結果連絡の期限を決める
+            if (reservationId) {
+              const fd = new FormData();
+              fd.set("id", reservationId);
+              startTransition(() => markAction(fd));
+            }
+          }}
           className="flex min-h-14 items-center justify-between border border-ink bg-accent px-4 font-bold"
         >
           {isLast ? "面接を終える" : "次へ"}

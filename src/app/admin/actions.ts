@@ -5,7 +5,16 @@ import { z } from "zod";
 import { failure, success, type ActionState } from "@/lib/action-state";
 import { isAdmin } from "@/lib/auth";
 import { guideSchema } from "@/lib/interview-guide";
-import { db, listBlocks, listEmployees, listShifts, listSlots, requireStore } from "@/lib/data/store";
+import {
+  db,
+  getAfterSettings,
+  listBlocks,
+  listEmployees,
+  listShifts,
+  listSlots,
+  requireStore,
+} from "@/lib/data/store";
+import { resultDueDate } from "@/lib/progress";
 import { generateSlots } from "@/lib/slots/generate";
 import { addDays, formatTime, jstToDate, parseTime, toJst } from "@/lib/time";
 import { resolveWeek } from "@/lib/week";
@@ -494,4 +503,127 @@ export async function saveInterviewGuide(_: ActionState, formData: FormData): Pr
   }
   refresh();
   return success(`面接の進め方を保存しました（${parsed.data.length}項目）。`);
+}
+
+// ---------- 面接後の進み具合 ----------
+
+const SETUP_NEEDED = "データベースの準備ができていません。Supabase で面接後の進み具合用の SQL を実行してください。";
+
+/** 面接済み（選考中）にして、結果連絡の期限を決める */
+export async function markInterviewed(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  const parsed = parse(z.object({ id: uuid }), formData);
+  if (parsed.error !== undefined) return failure(parsed.error);
+  const store = await requireStore();
+  const settings = await getAfterSettings(store.id);
+  if (!settings) return failure(SETUP_NEEDED);
+
+  const { data: r, error: readError } = await db()
+    .from("reservations")
+    .select("id, interview_at, status")
+    .eq("id", parsed.data.id)
+    .eq("store_id", store.id)
+    .maybeSingle();
+  if (readError) return failure(explain(readError));
+  if (!r) return failure("予約が見つかりません。");
+  if (r.status !== "booked") return failure("この予約は、すでに面接済みか辞退されています。");
+
+  const due = resultDueDate(toJst(r.interview_at).date, settings.result_days);
+  const { error } = await db()
+    .from("reservations")
+    .update({ status: "interviewed", result_due: due, updated_at: new Date().toISOString() })
+    .eq("id", r.id)
+    .eq("store_id", store.id)
+    .eq("status", "booked");
+  if (error) return failure(explain(error));
+  refresh();
+  return success(`選考中にしました。結果連絡の期限は ${due.slice(5).replace("-", "/")} です。`);
+}
+
+/** 採用・見送りを決める（決めた結果は、応募者のページにすぐ表示される） */
+export async function setResult(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  const parsed = parse(z.object({ id: uuid, result: z.enum(["passed", "rejected", "interviewed"]) }), formData);
+  if (parsed.error !== undefined) return failure(parsed.error);
+  const store = await requireStore();
+  const settings = await getAfterSettings(store.id);
+  if (!settings) return failure(SETUP_NEEDED);
+
+  const { data: r, error: readError } = await db()
+    .from("reservations")
+    .select("id, interview_at, status, result_due")
+    .eq("id", parsed.data.id)
+    .eq("store_id", store.id)
+    .maybeSingle();
+  if (readError) return failure(explain(readError));
+  if (!r) return failure("予約が見つかりません。");
+  if (r.status === "canceled") return failure("辞退された予約は変更できません。");
+
+  const { result } = parsed.data;
+  const patch: Record<string, unknown> = { status: result, updated_at: new Date().toISOString() };
+  // 「面接済み」を飛ばして結果を決めた場合も、期限は記録しておく
+  if (!r.result_due) patch.result_due = resultDueDate(toJst(r.interview_at).date, settings.result_days);
+  if (result !== "passed") patch.first_day_at = null;
+
+  const { error } = await db()
+    .from("reservations")
+    .update(patch)
+    .eq("id", r.id)
+    .eq("store_id", store.id)
+    .neq("status", "canceled");
+  if (error) return failure(explain(error));
+  refresh();
+  return success(
+    {
+      passed: "採用にしました。応募者のページに入店案内が表示されます。初出勤の日時も入れてください。",
+      rejected: "見送りにしました。応募者のページにお礼のメッセージが表示されます。",
+      interviewed: "選考中に戻しました。",
+    }[result],
+  );
+}
+
+/** 採用した人の初出勤の日時（応募者のページの入店案内に表示） */
+export async function setFirstDay(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  const parsed = parse(
+    z.object({ id: uuid, date: z.union([date, z.literal("")]), time: z.union([time, z.literal("")]) }),
+    formData,
+  );
+  if (parsed.error !== undefined) return failure(parsed.error);
+  const { id, date: day, time: minutes } = parsed.data;
+  if ((day === "") !== (minutes === "")) return failure("日付と時刻の両方を入れてください。");
+  const store = await requireStore();
+  const firstDay = day === "" || minutes === "" ? null : jstToDate(day, minutes).toISOString();
+  const { data, error } = await db()
+    .from("reservations")
+    .update({ first_day_at: firstDay, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("store_id", store.id)
+    .eq("status", "passed")
+    .select("id");
+  if (error) return failure(explain(error));
+  if (data.length === 0) return failure("採用した予約だけに設定できます。");
+  refresh();
+  return success(firstDay ? "初出勤の日時を保存しました。応募者のページに表示されます。" : "初出勤の日時を消しました。");
+}
+
+const afterSchema = z.object({
+  result_days: z.coerce.number().int().min(1, "1〜14日で選んでください").max(14, "1〜14日で選んでください"),
+  onboarding_message: z.string().trim().min(1, "入店案内を入力してください").max(500, "入店案内は500文字以内です"),
+  thanks_message: z.string().trim().min(1, "お礼のメッセージを入力してください").max(500, "お礼のメッセージは500文字以内です"),
+});
+
+/** 面接後の案内（結果連絡までの日数・入店案内・お礼の文） */
+export async function updateAfterSettings(_: ActionState, formData: FormData): Promise<ActionState> {
+  if (!(await isAdmin())) return failure(LOGIN_REQUIRED);
+  const parsed = parse(afterSchema, formData);
+  if (parsed.error !== undefined) return failure(parsed.error);
+  const store = await requireStore();
+  const { error } = await db().from("stores").update(parsed.data).eq("id", store.id);
+  if (error) {
+    if (error.code === "42703") return failure(SETUP_NEEDED);
+    return failure(explain(error));
+  }
+  refresh();
+  return success("面接後の案内を保存しました。");
 }

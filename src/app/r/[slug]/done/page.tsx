@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { getReservationSummary, getStoreBySlug, isDatabaseConfigured } from "@/lib/data/store";
+import { getReservationSummary, getStatusToken, getStoreBySlug, isDatabaseConfigured } from "@/lib/data/store";
 import { formatDateShort, formatTime, toJst } from "@/lib/time";
 import { ApplicantShell } from "../applicant-shell";
 
@@ -20,7 +20,7 @@ async function Done({ params, searchParams }: PageProps<"/r/[slug]/done">) {
   if (!isDatabaseConfigured() || typeof r !== "string") notFound();
   const store = await getStoreBySlug(slug);
   if (!store) notFound();
-  const summary = await getReservationSummary(store.id, r);
+  const [summary, token] = await Promise.all([getReservationSummary(store.id, r), getStatusToken(store.id, r)]);
   if (!summary) notFound();
 
   const start = toJst(summary.start_at);
@@ -51,17 +51,26 @@ async function Done({ params, searchParams }: PageProps<"/r/[slug]/done">) {
       </div>
 
       <ul className="mt-6 space-y-2 text-sm leading-relaxed text-gray">
-        <li>・この画面をスクリーンショットなどで保存しておくと安心です。</li>
+        <li>・面接の結果は、下の「応募状況のページ」でお知らせします。ページをブックマークしておいてください。</li>
         <li>・当日は、お店のスタッフにお名前をお伝えください。</li>
-        <li>・日時の変更やキャンセルは、お店に直接ご連絡ください。</li>
+        <li>・日時の変更や辞退も、応募状況のページから手続きできます。</li>
       </ul>
 
-      <Link
-        href={`/r/${store.public_slug}`}
-        className="mt-8 flex min-h-12 items-center justify-center border border-ink bg-white text-sm font-bold"
-      >
-        予約ページに戻る
-      </Link>
+      {token ? (
+        <Link
+          href={`/r/${store.public_slug}/s/${token}`}
+          className="mt-8 flex min-h-12 items-center justify-between border border-ink bg-ink px-4 font-bold text-white"
+        >
+          応募状況のページを開く<span className="num">→</span>
+        </Link>
+      ) : (
+        <Link
+          href={`/r/${store.public_slug}`}
+          className="mt-8 flex min-h-12 items-center justify-center border border-ink bg-white text-sm font-bold"
+        >
+          予約ページに戻る
+        </Link>
+      )}
     </ApplicantShell>
   );
 }

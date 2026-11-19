@@ -14,11 +14,13 @@ import {
   listShifts,
   listSlots,
 } from "@/lib/data/store";
-import { formatDateShort, formatPhone, formatTime, jstToDate, todayJst, toJst } from "@/lib/time";
+import { addDays, formatDateShort, formatPhone, formatTime, jstToDate, todayJst, toJst } from "@/lib/time";
+import { dueInfo } from "@/lib/progress";
 import { ReservationCalendar, type CalendarReservation } from "./reservation-calendar";
 import { resolveWeek } from "@/lib/week";
 
-export default async function AdminHome() {
+export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
+  const { d } = await searchParams;
   await connection();
   await requireAdminPage();
   if (!isDatabaseConfigured()) return <SetupNotice />;
@@ -30,14 +32,15 @@ export default async function AdminHome() {
     listEmployees(store.id),
     listShifts(store.id, week.from, week.to),
     listSlots(store.id, week.from, week.to),
-    // 今月1日以降の予約（カレンダーで今月の過去分も見られるように）
-    listReservations(store.id, jstToDate(`${todayJst().slice(0, 8)}01`, 0).toISOString()),
+    // 31日前以降の予約（今月の過去分と、先月面接して選考中の人も見られるように）
+    listReservations(store.id, jstToDate(addDays(todayJst(), -31), 0).toISOString()),
     listBookableSlots(store.id),
     bookingUrl(store.public_slug),
     getInterviewGuide(store.id),
   ]);
   const guideCount = guide.needsSetup ? 0 : guide.items.length;
   const today = todayJst();
+  const origin = new URL(url).origin;
   const calendar: CalendarReservation[] = reservations.map((r) => {
     const start = toJst(r.start_at);
     const end = toJst(r.end_at);
@@ -51,8 +54,18 @@ export default async function AdminHome() {
       phoneRaw: r.phone,
       email: r.email,
       interviewer: r.interviewer_name,
+      status: r.status,
+      resultDue: r.result_due,
+      firstDayDate: r.first_day_at ? toJst(r.first_day_at).date : null,
+      firstDayTime: r.first_day_at ? formatTime(toJst(r.first_day_at).minutes) : null,
+      statusUrl: r.status_token ? `${origin}/r/${store.public_slug}/s/${r.status_token}` : null,
+      canceledReason: r.canceled_reason,
     };
   });
+  // 結果連絡を待っている人（期限の近い順）
+  const waiting = calendar
+    .filter((r) => r.status === "interviewed" && r.resultDue)
+    .sort((a, b) => (a.resultDue ?? "").localeCompare(b.resultDue ?? ""));
   const interviewers = employees.filter((e) => e.is_interviewer);
   const interviewerShifts = shifts.filter((s) => interviewers.some((e) => e.id === s.employee_id));
   const published = slots.filter((s) => s.status === "published").length;
@@ -97,8 +110,52 @@ export default async function AdminHome() {
         今週は {formatDateShort(week.from)}〜{formatDateShort(week.to)}
       </PageHeader>
 
+      {waiting.length > 0 && (
+        <section className="mb-4 border border-ink bg-white">
+          <h2 className="flex items-center justify-between border-b border-ink px-4 py-3 text-sm font-bold">
+            <span className="flex items-center gap-2">
+              <span className="inline-block size-1.5 bg-ink" aria-hidden />
+              結果の連絡を待っている人
+            </span>
+            <span className="num text-xs font-normal text-gray">{waiting.length}人</span>
+          </h2>
+          <ul>
+            {waiting.map((r) => {
+              const info = dueInfo(r.resultDue!, today);
+              return (
+                <li key={r.id} className="border-b border-line last:border-b-0">
+                  <Link href={`/admin?d=${r.date}`} className="flex min-h-14 items-center gap-3 px-4 py-2">
+                    <span className="flex-1">
+                      <span className="block font-bold">{r.name} さん</span>
+                      <span className="num block text-xs text-gray">
+                        面接 {formatDateShort(r.date)} ／ 期限 {formatDateShort(r.resultDue!)}
+                      </span>
+                    </span>
+                    <span
+                      className={`shrink-0 px-2 py-1 text-xs font-bold ${
+                        info.level === "overdue"
+                          ? "bg-danger text-white"
+                          : info.level === "ok"
+                            ? "border border-line text-gray"
+                            : "border border-danger text-danger"
+                      }`}
+                    >
+                      {info.label}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
       <div className="mb-4">
-        <ReservationCalendar reservations={calendar} today={today} />
+        <ReservationCalendar
+          reservations={calendar}
+          today={today}
+          initialDate={typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined}
+        />
       </div>
 
       <div className="mb-4">

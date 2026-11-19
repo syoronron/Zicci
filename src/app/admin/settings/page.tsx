@@ -5,10 +5,10 @@ import { PageHeader, Section, SetupNotice } from "@/components/page-header";
 import { ShareBooking } from "@/components/share-booking";
 import { bookingUrl } from "@/lib/site-url";
 import { TimeSelect } from "@/components/time-select";
-import { getStore, isDatabaseConfigured, listBlocks } from "@/lib/data/store";
+import { getAfterSettings, getStore, isDatabaseConfigured, listBlocks } from "@/lib/data/store";
 import { formatTime, weekdayLabel } from "@/lib/time";
 import { logout } from "../../login/actions";
-import { addBlock, deleteBlock, updateStore } from "../actions";
+import { addBlock, deleteBlock, updateAfterSettings, updateStore } from "../actions";
 
 export default async function SettingsPage() {
   await connection();
@@ -16,7 +16,7 @@ export default async function SettingsPage() {
   if (!isDatabaseConfigured()) return <SetupNotice />;
   const store = await getStore();
   if (!store) return null;
-  const blocks = await listBlocks(store.id);
+  const [blocks, after] = await Promise.all([listBlocks(store.id), getAfterSettings(store.id)]);
   const url = await bookingUrl(store.public_slug);
 
   return (
@@ -149,6 +149,61 @@ export default async function SettingsPage() {
               時間帯を追加する
             </SubmitButton>
           </ActionForm>
+        </Section>
+
+        <Section title="面接後の案内">
+          {after ? (
+            <ActionForm action={updateAfterSettings} className="space-y-3">
+              <div>
+                <label className="label" htmlFor="result_days">
+                  結果を連絡するまでの日数（面接日から）
+                </label>
+                <select id="result_days" name="result_days" className="field num" defaultValue={after.result_days}>
+                  {Array.from({ length: 14 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}日以内
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="onboarding_message">
+                  採用した方への入店案内（持ち物・集合場所など）
+                </label>
+                <textarea
+                  id="onboarding_message"
+                  name="onboarding_message"
+                  rows={5}
+                  maxLength={500}
+                  defaultValue={after.onboarding_message}
+                  className="field py-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="thanks_message">
+                  見送った方へのお礼のメッセージ
+                </label>
+                <textarea
+                  id="thanks_message"
+                  name="thanks_message"
+                  rows={5}
+                  maxLength={500}
+                  defaultValue={after.thanks_message}
+                  className="field py-2"
+                  required
+                />
+              </div>
+              <SubmitButton variant="outline" className="w-full">
+                面接後の案内を保存する
+              </SubmitButton>
+            </ActionForm>
+          ) : (
+            <p className="text-sm text-gray">
+              Supabase の SQL Editor で <span className="num text-ink">20261120000000_reservation_progress.sql</span>{" "}
+              を実行すると、ここで設定できるようになります。
+            </p>
+          )}
         </Section>
 
         <Section title="応募者向けの予約ページ">
