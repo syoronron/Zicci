@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import QRCode from "qrcode";
 import { useState } from "react";
 
 /**
@@ -20,6 +22,7 @@ export function ShareBooking({
   showUrl?: boolean;
 }) {
   const [notice, setNotice] = useState<string | null>(null);
+  const [qr, setQr] = useState<string | null>(null); // QRコードの画像（PNG の data URL）
   const text = `${storeName}の面接日時は、こちらからお選びください。`;
 
   const flash = (message: string) => {
@@ -49,6 +52,36 @@ export function ShareBooking({
     await copy();
   };
 
+  /** QRコードを表示する／閉じる（作成は端末の中だけで行い、外部には送らない） */
+  const toggleQr = async () => {
+    if (qr) return setQr(null);
+    try {
+      setQr(await QRCode.toDataURL(url, { width: 720, margin: 2, errorCorrectionLevel: "M" }));
+    } catch {
+      flash("QRコードを作れませんでした。");
+    }
+  };
+
+  /** QR画像を共有（スマホ）または保存（パソコン） */
+  const saveQr = async () => {
+    if (!qr) return;
+    const blob = await (await fetch(qr)).blob();
+    const file = new File([blob], `${storeName}_面接予約QR.png`, { type: "image/png" });
+    if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: `${storeName} 面接予約`, text });
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+      }
+    }
+    const a = document.createElement("a");
+    a.href = qr;
+    a.download = file.name;
+    a.click();
+    flash("QRコードの画像を保存しました。");
+  };
+
   const main =
     variant === "accent" ? "border border-ink bg-accent text-ink" : "border border-ink bg-ink text-white";
 
@@ -63,9 +96,17 @@ export function ShareBooking({
         予約ページを共有する
         <span className="text-xs font-medium">LINE・メールなど</span>
       </button>
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-3 gap-2">
         <button type="button" onClick={copy} className="min-h-11 border border-ink bg-white text-sm font-bold">
           URLをコピー
+        </button>
+        <button
+          type="button"
+          onClick={toggleQr}
+          aria-expanded={qr !== null}
+          className={`min-h-11 border border-ink text-sm font-bold ${qr ? "bg-ink text-white" : "bg-white"}`}
+        >
+          QRコード
         </button>
         <a
           href={url}
@@ -76,6 +117,24 @@ export function ShareBooking({
           ページを確認
         </a>
       </div>
+      {qr && (
+        <div className="mt-3 border border-ink bg-white p-4 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element -- 端末で作った QR 画像（data URL）を表示するため */}
+          <img src={qr} alt={`${storeName}の面接予約ページのQRコード`} className="mx-auto w-full max-w-60" />
+          <p className="mt-2 text-xs text-gray">スマホのカメラで読み取ると、予約ページが開きます</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" onClick={saveQr} className="min-h-11 border border-ink bg-white text-sm font-bold">
+              QR画像を保存・共有
+            </button>
+            <Link
+              href="/admin/qr"
+              className="flex min-h-11 items-center justify-center border border-ink bg-white text-sm font-bold"
+            >
+              印刷用ポスター
+            </Link>
+          </div>
+        </div>
+      )}
       {notice && (
         <p role="status" className="mt-2 text-sm text-gray">
           {notice}

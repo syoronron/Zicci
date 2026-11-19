@@ -86,7 +86,7 @@ export function AdminNav() {
   const pathname = usePathname();
   const week = useSearchParams().get("week");
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-ink bg-white pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-ink bg-white pb-[env(safe-area-inset-bottom)] print:hidden">
       <ul className="mx-auto grid max-w-md grid-cols-5">
         {tabs.map((tab) => {
           const active = isActive(tab, pathname);

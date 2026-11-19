@@ -58,3 +58,16 @@ body {
     @apply mb-1 block text-xs font-medium text-gray;
   }
 }
+
+/* 印刷：A4 縦・余白なし（ポスター用）。背景色も印刷する */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  body {
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
