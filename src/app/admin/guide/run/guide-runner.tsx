@@ -109,8 +109,11 @@ export function GuideRunner({
               面接の記録を見る
             </Link>
           )}
-          <Link href="/admin" className="flex min-h-12 items-center justify-center border border-ink bg-white font-bold">
-            ホームに戻る
+          <Link
+            href={reservationId ? "/admin/reservations" : "/admin"}
+            className="flex min-h-12 items-center justify-center border border-ink bg-white font-bold"
+          >
+            {reservationId ? "予約・面接に戻る" : "ホームに戻る"}
           </Link>
           <button
             type="button"

@@ -4,13 +4,25 @@ import Link, { useLinkStatus } from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 /** 画面下のタブ（片手・親指で届く位置） */
+/**
+ * 店長の作業順（シフト → 面接枠 → 予約）に、左から並べる。
+ * also：そのタブの中として扱うページ（そのページを開いているときもタブを選択状態にする）
+ */
 const tabs = [
-  { href: "/admin", label: "ホーム", icon: "home" },
-  { href: "/admin/staff", label: "スタッフ", icon: "staff" },
-  { href: "/admin/shifts", label: "シフト", icon: "shift" },
-  { href: "/admin/slots", label: "面接枠", icon: "slot" },
-  { href: "/admin/settings", label: "設定", icon: "settings" },
+  { href: "/admin", label: "ホーム", icon: "home", also: [] },
+  { href: "/admin/shifts", label: "シフト", icon: "shift", also: ["/admin/import"] },
+  { href: "/admin/slots", label: "面接枠", icon: "slot", also: [] },
+  { href: "/admin/reservations", label: "予約・面接", icon: "reserve", also: ["/admin/guide/run", "/admin/guide/record"] },
+  { href: "/admin/settings", label: "設定", icon: "settings", also: ["/admin/staff", "/admin/guide"] },
 ] as const;
+
+function isActive(tab: (typeof tabs)[number], pathname: string): boolean {
+  if (tab.href === "/admin") return pathname === "/admin";
+  if (pathname.startsWith(tab.href)) return true;
+  // 「面接の進め方」の編集は設定、面接中・記録は予約・面接
+  if (tab.href === "/admin/settings" && /^\/admin\/guide\/(run|record)/.test(pathname)) return false;
+  return tab.also.some((p) => pathname.startsWith(p));
+}
 
 function Icon({ name, active }: { name: (typeof tabs)[number]["icon"]; active: boolean }) {
   const fill = active ? "#141414" : "none";
@@ -22,11 +34,14 @@ function Icon({ name, active }: { name: (typeof tabs)[number]["icon"]; active: b
           <rect x="2" y="2" width="16" height="16" fill={fill} {...s} />
         </svg>
       );
-    case "staff":
+    case "reserve":
       return (
         <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
-          <circle cx="10" cy="7" r="4" fill={fill} {...s} />
-          <path d="M3 18 Q3 12 10 12 Q17 12 17 18 Z" fill={fill} {...s} />
+          <rect x="2" y="4" width="16" height="14" fill="none" {...s} />
+          <line x1="2" y1="8" x2="18" y2="8" {...s} />
+          <line x1="6" y1="2" x2="6" y2="5" {...s} />
+          <line x1="14" y1="2" x2="14" y2="5" {...s} />
+          <rect x="10" y="11" width="5" height="4" fill={active ? "#141414" : "none"} {...s} />
         </svg>
       );
     case "shift":
@@ -74,7 +89,7 @@ export function AdminNav() {
     <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-ink bg-white pb-[env(safe-area-inset-bottom)]">
       <ul className="mx-auto grid max-w-md grid-cols-5">
         {tabs.map((tab) => {
-          const active = tab.href === "/admin" ? pathname === "/admin" : pathname.startsWith(tab.href);
+          const active = isActive(tab, pathname);
           // シフトと面接枠の間では、見ている週を引き継ぐ
           const keepWeek = week && (tab.href === "/admin/shifts" || tab.href === "/admin/slots");
           return (

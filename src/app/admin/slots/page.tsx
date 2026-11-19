@@ -15,6 +15,7 @@ import {
   type Slot,
 } from "@/lib/data/store";
 import { formatDateShort, formatTime, toJst, weekdayOf } from "@/lib/time";
+import { defaultWeekStart } from "@/lib/default-week";
 import { resolveWeek } from "@/lib/week";
 import { publishSlots, regenerateSlots, toggleSlot } from "../actions";
 
@@ -32,7 +33,8 @@ export default async function SlotsPage({ searchParams }: PageProps<"/admin/slot
   const store = await getStore();
   if (!store) return null;
 
-  const week = resolveWeek(weekParam);
+  // 週の指定がなければ、一番近い「面接担当のシフトがある週」を表示する
+  const week = resolveWeek(weekParam ?? (await defaultWeekStart(store.id)));
   const [blocks, employees, shifts, slots] = await Promise.all([
     listBlocks(store.id),
     listEmployees(store.id),
@@ -49,8 +51,8 @@ export default async function SlotsPage({ searchParams }: PageProps<"/admin/slot
 
   return (
     <>
-      <PageHeader eyebrow="SLOTS" title="面接枠の確認と公開">
-        シフトと繁忙時間から面接枠を自動で作ります。内容を確認して、公開してください。
+      <PageHeader eyebrow="STEP 2・3" title="面接枠">
+        ① 面接枠を作る → ② 内容を確認して公開 → ③ 予約ページを応募者に送る、の順に進めます。
       </PageHeader>
 
       <div className="space-y-4">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { connection } from "next/server";
 import { requireAdminPage } from "@/lib/auth";
 import { ActionForm, SubmitButton } from "@/components/action-form";
@@ -26,6 +27,18 @@ export default async function SettingsPage() {
       </PageHeader>
 
       <div className="space-y-4">
+        <nav className="grid grid-cols-2 gap-2" aria-label="ほかの設定">
+          {[
+            { href: "/admin/staff", title: "スタッフ", sub: "面接担当を選ぶ" },
+            { href: "/admin/guide", title: "面接の進め方", sub: "質問の流れを作る" },
+          ].map((l) => (
+            <Link key={l.href} href={l.href} className="flex min-h-16 flex-col justify-center border border-ink bg-white px-3 py-2">
+              <span className="font-bold">{l.title}</span>
+              <span className="text-xs text-gray">{l.sub}</span>
+            </Link>
+          ))}
+        </nav>
+
         <Section title="店舗情報と面接のルール">
           <ActionForm action={updateStore} className="space-y-3">
             <div>

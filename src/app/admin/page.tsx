@@ -1,204 +1,258 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { requireAdminPage } from "@/lib/auth";
-import { PageHeader, Section, SetupNotice } from "@/components/page-header";
+import type { ReactNode } from "react";
+import { PageHeader, SetupNotice } from "@/components/page-header";
 import { ShareBooking } from "@/components/share-booking";
-import { bookingUrl } from "@/lib/site-url";
+import { requireAdminPage } from "@/lib/auth";
 import {
   getInterviewGuide,
   getStore,
   isDatabaseConfigured,
   listBookableSlots,
   listEmployees,
-  listReservations,
   listShifts,
   listSlots,
 } from "@/lib/data/store";
-import { addDays, formatDateShort, formatPhone, formatTime, jstToDate, todayJst, toJst } from "@/lib/time";
 import { dueInfo } from "@/lib/progress";
-import { ReservationCalendar, type CalendarReservation } from "./reservation-calendar";
-import { resolveWeek } from "@/lib/week";
+import { addDays, formatDateShort, mondayOf, todayJst } from "@/lib/time";
+import { loadReservations } from "./reservation-data";
 
-export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
-  const { d } = await searchParams;
+/** 準備や予約を見る期間（今日から2週間） */
+const HORIZON_DAYS = 14;
+
+type StepState = "done" | "next" | "todo";
+
+/**
+ * ホーム：店長の作業順に、5つの手順を並べる。
+ * 終わった手順には ✓、まだ終わっていない最初の手順を「次はここ」として強調する。
+ */
+export default async function AdminHome() {
   await connection();
   await requireAdminPage();
   if (!isDatabaseConfigured()) return <SetupNotice />;
   const store = await getStore();
   if (!store) return <p className="text-sm">デモ店舗が見つかりません。seed.sql を実行してください。</p>;
 
-  const week = resolveWeek(undefined);
-  const [employees, shifts, slots, reservations, bookable, url, guide] = await Promise.all([
-    listEmployees(store.id),
-    listShifts(store.id, week.from, week.to),
-    listSlots(store.id, week.from, week.to),
-    // 31日前以降の予約（今月の過去分と、先月面接して選考中の人も見られるように）
-    listReservations(store.id, jstToDate(addDays(todayJst(), -31), 0).toISOString()),
-    listBookableSlots(store.id),
-    bookingUrl(store.public_slug),
-    getInterviewGuide(store.id),
-  ]);
-  const guideCount = guide.needsSetup ? 0 : guide.items.length;
   const today = todayJst();
-  const origin = new URL(url).origin;
-  const calendar: CalendarReservation[] = reservations.map((r) => {
-    const start = toJst(r.start_at);
-    const end = toJst(r.end_at);
-    return {
-      id: r.id,
-      date: start.date,
-      start: formatTime(start.minutes),
-      end: formatTime(end.minutes || 1440),
-      name: r.applicant_name,
-      phone: r.phone ? formatPhone(r.phone) : null,
-      phoneRaw: r.phone,
-      email: r.email,
-      interviewer: r.interviewer_name,
-      status: r.status,
-      resultDue: r.result_due,
-      firstDayDate: r.first_day_at ? toJst(r.first_day_at).date : null,
-      firstDayTime: r.first_day_at ? formatTime(toJst(r.first_day_at).minutes) : null,
-      statusUrl: r.status_token ? `${origin}/r/${store.public_slug}/s/${r.status_token}` : null,
-      canceledReason: r.canceled_reason,
-      evaluation: r.evaluation,
-      hasRecord: r.has_record,
-    };
-  });
-  // 結果連絡を待っている人（期限の近い順）
-  const waiting = calendar
-    .filter((r) => r.status === "interviewed" && r.resultDue)
-    .sort((a, b) => (a.resultDue ?? "").localeCompare(b.resultDue ?? ""));
-  const interviewers = employees.filter((e) => e.is_interviewer);
-  const interviewerShifts = shifts.filter((s) => interviewers.some((e) => e.id === s.employee_id));
-  const published = slots.filter((s) => s.status === "published").length;
-  const draft = slots.filter((s) => s.status === "draft").length;
+  const until = addDays(today, HORIZON_DAYS - 1);
+  const [employees, shifts, slots, bookable, guide, res] = await Promise.all([
+    listEmployees(store.id),
+    listShifts(store.id, today, until),
+    listSlots(store.id, today, until),
+    listBookableSlots(store.id),
+    getInterviewGuide(store.id),
+    loadReservations(store),
+  ]);
 
-  const steps = [
-    {
-      done: interviewers.length > 0,
-      title: "面接担当を選ぶ",
-      detail: `面接担当 ${interviewers.length}人`,
-      href: "/admin/staff",
-    },
-    {
-      done: guideCount > 0,
-      title: "面接の進め方を作る",
-      detail: guideCount > 0 ? `${guideCount}項目` : "アルバイトでも面接できるように",
-      href: "/admin/guide",
-    },
-    {
-      done: interviewerShifts.length > 0,
-      title: "シフトを入力する",
-      detail: `今週のシフト ${interviewerShifts.length}件`,
-      href: "/admin/shifts",
-    },
-    {
-      done: slots.length > 0,
-      title: "面接枠を作る",
-      detail: `公開待ち ${draft}件`,
-      href: "/admin/slots",
-    },
-    {
-      done: published > 0,
-      title: "面接枠を公開する",
-      detail: `公開中 ${published}件`,
-      href: "/admin/slots",
-    },
-  ];
+  const interviewerIds = new Set(employees.filter((e) => e.is_interviewer).map((e) => e.id));
+  const upcomingShifts = shifts.filter((s) => interviewerIds.has(s.employee_id));
+  const interviewerShifts = upcomingShifts.length;
+  // 面接枠は、一番近い面接担当のシフトがある週を開く
+  const slotsHref = upcomingShifts[0] ? `/admin/slots?week=${mondayOf(upcomingShifts[0].date)}` : "/admin/slots";
+  const draft = slots.filter((s) => s.status === "draft" && !s.reserved).length;
+  const upcoming = res.calendar.filter((r) => r.date >= today && r.status !== "canceled");
+  const todays = res.calendar
+    .filter((r) => r.date === today && r.status === "booked")
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const overdue = res.waiting.filter((r) => dueInfo(r.resultDue!, today).level !== "ok").length;
+  const guideCount = guide.needsSetup ? 0 : guide.items.length;
+
+  // どの手順まで終わっているか
+  const done = {
+    shift: interviewerShifts > 0,
+    slots: bookable.length > 0,
+    share: upcoming.length > 0,
+  };
+  const nextKey = !done.shift
+    ? "shift"
+    : !done.slots
+      ? "slots"
+      : !done.share
+        ? "share"
+        : todays.length > 0
+          ? "interview"
+          : res.waiting.length > 0
+            ? "result"
+            : null;
+  const state = (key: string, isDone: boolean): StepState => (key === nextKey ? "next" : isDone ? "done" : "todo");
 
   return (
     <>
       <PageHeader eyebrow="HOME" title={store.name}>
-        今週は {formatDateShort(week.from)}〜{formatDateShort(week.to)}
+        今日は {formatDateShort(today)}
+        {nextKey === null && "。準備はすべて整っています。"}
       </PageHeader>
 
-      {waiting.length > 0 && (
-        <section className="mb-4 border border-ink bg-white">
-          <h2 className="flex items-center justify-between border-b border-ink px-4 py-3 text-sm font-bold">
-            <span className="flex items-center gap-2">
-              <span className="inline-block size-1.5 bg-ink" aria-hidden />
-              結果の連絡を待っている人
-            </span>
-            <span className="num text-xs font-normal text-gray">{waiting.length}人</span>
-          </h2>
-          <ul>
-            {waiting.map((r) => {
-              const info = dueInfo(r.resultDue!, today);
-              return (
-                <li key={r.id} className="border-b border-line last:border-b-0">
-                  <Link href={`/admin?d=${r.date}`} className="flex min-h-14 items-center gap-3 px-4 py-2">
-                    <span className="flex-1">
-                      <span className="block font-bold">{r.name} さん</span>
-                      <span className="num block text-xs text-gray">
-                        面接 {formatDateShort(r.date)} ／ 期限 {formatDateShort(r.resultDue!)}
-                      </span>
-                    </span>
-                    <span
-                      className={`shrink-0 px-2 py-1 text-xs font-bold ${
-                        info.level === "overdue"
-                          ? "bg-danger text-white"
-                          : info.level === "ok"
-                            ? "border border-line text-gray"
-                            : "border border-danger text-danger"
-                      }`}
-                    >
-                      {info.label}
-                    </span>
+      <ol className="space-y-3">
+        {/* ① シフト表を読み込む */}
+        <Step
+          n={1}
+          state={state("shift", done.shift)}
+          title="シフト表を読み込む"
+          detail={
+            done.shift
+              ? `これから2週間の面接担当のシフト：${interviewerShifts}件`
+              : "紙のシフト表を撮影して、面接担当の勤務を入れます"
+          }
+        >
+          <Action href="/admin/import" primary={nextKey === "shift"}>
+            シフト表の写真を読み込む
+          </Action>
+        </Step>
+
+        {/* ② 面接枠を作って公開する */}
+        <Step
+          n={2}
+          state={state("slots", done.slots)}
+          title="面接枠を作って公開する"
+          detail={
+            done.slots
+              ? `応募者が予約できる枠：${bookable.length}件${draft > 0 ? `（ほかに公開待ち ${draft}件）` : ""}`
+              : draft > 0
+                ? `公開待ちの枠が${draft}件あります。公開すると予約できるようになります`
+                : "シフトと忙しい時間から、面接枠を自動で作ります"
+          }
+        >
+          <Action href={slotsHref} primary={nextKey === "slots"}>
+            {draft > 0 && !done.slots ? "面接枠を確認して公開する" : "面接枠を作る・確認する"}
+          </Action>
+        </Step>
+
+        {/* ③ 応募者に予約ページを送る */}
+        <Step
+          n={3}
+          state={state("share", done.share)}
+          title="応募者に予約ページを送る"
+          detail={
+            done.share ? `これからの予約：${upcoming.length}件` : "予約ページのURLを、LINEやメールで応募者に送ります"
+          }
+        >
+          {bookable.length === 0 ? (
+            <p className="text-xs text-danger">予約できる枠がないため、先に②で面接枠を公開してください。</p>
+          ) : (
+            <ShareBooking
+              url={res.bookingUrl}
+              storeName={store.name}
+              variant={nextKey === "share" ? "accent" : "ink"}
+              showUrl={false}
+            />
+          )}
+        </Step>
+
+        {/* ④ 面接する */}
+        <Step
+          n={4}
+          state={state("interview", false)}
+          title="面接する"
+          detail={
+            todays.length > 0
+              ? `今日の面接：${todays.length}件`
+              : `今日の面接はありません（これからの予約 ${upcoming.length}件）`
+          }
+        >
+          {todays.length > 0 && (
+            <ul className="mb-2 border-y border-line">
+              {todays.map((r) => (
+                <li key={r.id} className="flex items-center gap-3 border-b border-line py-2 last:border-b-0">
+                  <span className="num w-12 text-lg font-bold">{r.start}</span>
+                  <span className="min-w-0 flex-1 truncate font-bold">{r.name} さん</span>
+                  <Link
+                    href={`/admin/guide/run?r=${r.id}`}
+                    className={`inline-flex min-h-10 shrink-0 items-center border border-ink px-3 text-sm font-bold ${
+                      nextKey === "interview" ? "bg-accent" : "bg-ink text-white"
+                    }`}
+                  >
+                    面接を始める
                   </Link>
                 </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      <div className="mb-4">
-        <ReservationCalendar
-          reservations={calendar}
-          today={today}
-          initialDate={typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined}
-        />
-      </div>
-
-      <div className="mb-4">
-        <Section
-          title="予約ページ"
-          aside={<span className="num text-xs text-gray">予約できる枠 {bookable.length}件</span>}
-        >
-          {bookable.length === 0 && (
-            <p className="mb-3 text-sm font-medium text-danger">
-              いま予約できる面接枠がありません。「面接枠」で枠を作って公開してから共有してください。
+              ))}
+            </ul>
+          )}
+          <Action href="/admin/reservations">予約カレンダーを見る</Action>
+          {guideCount === 0 && (
+            <p className="mt-2 text-xs text-gray">
+              <Link href="/admin/guide" className="font-bold text-ink underline underline-offset-4">
+                面接の進め方
+              </Link>
+              を作っておくと、アルバイトのスタッフでも面接できます。
             </p>
           )}
-          <ShareBooking url={url} storeName={store.name} variant="accent" showUrl={false} />
-        </Section>
-      </div>
+        </Step>
 
-      <h2 className="mb-2 text-sm font-bold">今週の準備状況</h2>
-      <ol className="border border-ink bg-white">
-        {steps.map((step, i) => (
-          <li key={step.title} className="border-b border-line last:border-b-0">
-            <Link href={step.href} className="flex min-h-16 items-center gap-3 px-4 py-3">
-              <span
-                className={`num flex size-7 shrink-0 items-center justify-center border border-ink text-xs font-bold ${
-                  step.done ? "bg-ink text-white" : "bg-white"
-                }`}
-              >
-                {step.done ? "✓" : i + 1}
-              </span>
-              <span className="flex-1">
-                <span className="block font-bold">{step.title}</span>
-                <span className="num block text-xs text-gray">{step.detail}</span>
-              </span>
-              <span className="num text-gray" aria-hidden>
-                →
-              </span>
-            </Link>
-          </li>
-        ))}
+        {/* ⑤ 結果を連絡する */}
+        <Step
+          n={5}
+          state={state("result", false)}
+          title="結果を決めて連絡する"
+          detail={
+            res.waiting.length > 0
+              ? `結果待ち：${res.waiting.length}人${overdue > 0 ? `（期限が近い・過ぎた人 ${overdue}人）` : ""}`
+              : "結果を待っている人はいません"
+          }
+          alert={overdue > 0}
+        >
+          <Action href="/admin/reservations" primary={nextKey === "result"}>
+            結果を決める
+          </Action>
+        </Step>
       </ol>
-
-
     </>
+  );
+}
+
+function Step({
+  n,
+  state,
+  title,
+  detail,
+  alert,
+  children,
+}: {
+  n: number;
+  state: StepState;
+  title: string;
+  detail: string;
+  alert?: boolean;
+  children: ReactNode;
+}) {
+  const isNext = state === "next";
+  return (
+    <li className={`bg-white p-4 ${isNext ? "border-2 border-ink" : "border border-ink"}`}>
+      <div className="flex items-start gap-3">
+        <span
+          className={`num flex size-8 shrink-0 items-center justify-center border border-ink text-sm font-bold ${
+            state === "done" ? "bg-ink text-white" : isNext ? "bg-accent" : "bg-white"
+          }`}
+          aria-label={state === "done" ? "完了" : `手順${n}`}
+        >
+          {state === "done" ? "✓" : n}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold">{title}</h2>
+            {isNext && <span className="bg-ink px-1.5 py-0.5 text-[10px] font-bold text-white">次はここ</span>}
+          </div>
+          <p className={`mt-0.5 text-xs ${alert ? "font-bold text-danger" : "text-gray"}`}>{detail}</p>
+        </div>
+      </div>
+      <div className="mt-3">{children}</div>
+    </li>
+  );
+}
+
+/** 手順のボタン。「次はここ」の手順だけ黄色 */
+function Action({ href, primary, children }: { href: string; primary?: boolean; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={`flex min-h-12 items-center justify-between border border-ink px-4 text-sm font-bold ${
+        primary ? "bg-accent" : "bg-white"
+      }`}
+    >
+      {children}
+      <span className="num" aria-hidden>
+        →
+      </span>
+    </Link>
   );
 }
