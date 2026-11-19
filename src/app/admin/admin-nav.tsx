@@ -5,19 +5,19 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 /** 画面下のタブ（片手・親指で届く位置） */
 /**
- * 店長の作業順（シフト → 面接枠 → 予約）に、左から並べる。
+ * 左端はホーム（予約・面接）。その右に採用の手順、シフト → 面接枠の作業順で並べる。
  * also：そのタブの中として扱うページ（そのページを開いているときもタブを選択状態にする）
  */
 const tabs = [
-  { href: "/admin", label: "ホーム", icon: "home", also: [] },
+  { href: "/admin", label: "ホーム", icon: "reserve", also: ["/admin/guide/run", "/admin/guide/record"] },
+  { href: "/admin/hiring", label: "採用", icon: "home", also: [] },
   { href: "/admin/shifts", label: "シフト", icon: "shift", also: ["/admin/import"] },
-  { href: "/admin/slots", label: "面接枠", icon: "slot", also: [] },
-  { href: "/admin/reservations", label: "予約・面接", icon: "reserve", also: ["/admin/guide/run", "/admin/guide/record"] },
+  { href: "/admin/slots", label: "面接枠", icon: "slot", also: ["/admin/qr"] },
   { href: "/admin/settings", label: "設定", icon: "settings", also: ["/admin/staff", "/admin/guide"] },
 ] as const;
 
 function isActive(tab: (typeof tabs)[number], pathname: string): boolean {
-  if (tab.href === "/admin") return pathname === "/admin";
+  if (tab.href === "/admin") return pathname === "/admin" || tab.also.some((p) => pathname.startsWith(p));
   if (pathname.startsWith(tab.href)) return true;
   // 「面接の進め方」の編集は設定、面接中・記録は予約・面接
   if (tab.href === "/admin/settings" && /^\/admin\/guide\/(run|record)/.test(pathname)) return false;
@@ -29,9 +29,13 @@ function Icon({ name, active }: { name: (typeof tabs)[number]["icon"]; active: b
   const s = { stroke: "#141414", strokeWidth: 1.5 };
   switch (name) {
     case "home":
+      // 採用：手順の一覧（✓ の四角と線）
       return (
         <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
-          <rect x="2" y="2" width="16" height="16" fill={fill} {...s} />
+          <rect x="2" y="2.5" width="5" height="5" fill={fill} {...s} />
+          <rect x="2" y="12.5" width="5" height="5" fill="none" {...s} />
+          <line x1="10" y1="5" x2="18" y2="5" {...s} />
+          <line x1="10" y1="15" x2="18" y2="15" {...s} />
         </svg>
       );
     case "reserve":

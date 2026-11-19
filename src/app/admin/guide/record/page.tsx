@@ -112,7 +112,7 @@ export default async function RecordPage({ searchParams }: PageProps<"/admin/gui
             {record ? "面接画面で記録を直す" : "面接を始める"}
           </Link>
         )}
-        <Link href={`/admin/reservations?d=${start.date}`} className="min-h-11 text-center text-sm text-gray underline underline-offset-4">
+        <Link href={`/admin?d=${start.date}`} className="min-h-11 text-center text-sm text-gray underline underline-offset-4">
           予約カレンダーに戻る
         </Link>
       </div>
